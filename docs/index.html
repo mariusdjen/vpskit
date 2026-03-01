@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="en" data-lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>vpskit - Set up, secure and deploy on your VPS</title>
+  <meta name="description" content="Configure, secure and deploy on your VPS from your terminal. No third-party service, no data sent anywhere. Open-source, step by step.">
+  <meta name="theme-color" content="#0d1117">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- ======== HEADER ======== -->
+<header class="header">
+  <div class="header-inner">
+    <a href="#" class="logo">
+      <span class="prompt">$</span> vpskit<span class="cursor"></span>
+    </a>
+    <div class="header-actions">
+      <button class="lang-toggle" id="langToggle" aria-label="Toggle language">EN / FR</button>
+      <a href="https://github.com/mariusdjen/vpskit" class="btn btn-outline" target="_blank" rel="noopener">
+        <svg class="btn-icon" viewBox="0 0 16 16"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+        <span>GitHub</span>
+      </a>
+      <a href="https://ko-fi.com/mariusdjn" class="btn btn-accent" target="_blank" rel="noopener">
+        <svg class="btn-icon" viewBox="0 0 16 16"><path d="M4.25 2.5c-1.336 0-2.75 1.164-2.75 3 0 2.15 1.58 4.144 3.365 5.682A20.565 20.565 0 008 13.393a20.561 20.561 0 003.135-2.211C12.92 9.644 14.5 7.65 14.5 5.5c0-1.836-1.414-3-2.75-3-1.373 0-2.609.986-3.029 2.456a.75.75 0 01-1.442 0C6.859 3.486 5.623 2.5 4.25 2.5z"/></svg>
+        <span lang="en">Donate</span>
+        <span lang="fr">Soutenir</span>
+      </a>
+    </div>
+  </div>
+</header>
+
+<!-- ======== HERO ======== -->
+<section class="hero">
+  <div class="container">
+    <h1 class="hero-title">
+      <span lang="en">Set up. Secure. Deploy.<br><span class="highlight">All from your terminal.</span></span>
+      <span lang="fr">Configurez. Sécurisez. Déployez.<br><span class="highlight">Tout depuis votre terminal.</span></span>
+    </h1>
+    <p class="hero-subtitle">
+      <span lang="en">No third-party service. No data sent anywhere. Your server, your keys, your control.</span>
+      <span lang="fr">Aucun service tiers. Aucune donnée envoyée. Votre serveur, vos clés, votre contrôle.</span>
+    </p>
+
+    <div class="oneliner">
+      <code id="onelinerCmd">bash &lt;(curl -sL https://raw.githubusercontent.com/mariusdjen/vpskit/main/vpskit.sh)</code>
+      <button class="copy-btn" data-copy="bash <(curl -sL https://raw.githubusercontent.com/mariusdjen/vpskit/main/vpskit.sh)" aria-label="Copy command">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+      </button>
+    </div>
+
+    <!-- Terminal mockup -->
+    <div class="terminal">
+      <div class="terminal-bar">
+        <span class="terminal-dot red"></span>
+        <span class="terminal-dot yellow"></span>
+        <span class="terminal-dot green"></span>
+        <span class="terminal-title">bash -- vpskit.sh</span>
+      </div>
+      <div class="terminal-body">
+<div class="terminal-line"><span class="t-bold">========================================</span></div>
+<div class="terminal-line"><span class="t-bold">&nbsp;&nbsp;VPSKIT</span></div>
+<div class="terminal-line"><span class="t-bold">&nbsp;&nbsp;Sécurise et prépare votre serveur</span></div>
+<div class="terminal-line"><span class="t-bold">========================================</span></div>
+<div class="terminal-line">&nbsp;</div>
+<div class="terminal-line"><span class="t-step">[>]</span> Étape 1/9 : Mise à jour système &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="t-ok">[OK]</span></div>
+<div class="terminal-line"><span class="t-step">[>]</span> Étape 2/9 : Création utilisateur &nbsp;&nbsp;&nbsp;&nbsp;<span class="t-ok">[OK]</span></div>
+<div class="terminal-line"><span class="t-step">[>]</span> Étape 3/9 : Clé SSH utilisateur &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="t-ok">[OK]</span></div>
+<div class="terminal-line"><span class="t-step">[>]</span> Étape 4/9 : Durcissement SSH &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="t-ok">[OK]</span></div>
+<div class="terminal-line"><span class="t-step">[>]</span> Étape 5/9 : Firewall &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="t-ok">[OK]</span></div>
+<div class="terminal-line"><span class="t-step">[>]</span> Étape 6/9 : Docker &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="t-ok">[OK]</span></div>
+<div class="terminal-line"><span class="t-step">[>]</span> Étape 7/9 : Caddy (reverse proxy) &nbsp;&nbsp;&nbsp;<span class="t-ok">[OK]</span></div>
+<div class="terminal-line"><span class="t-step">[>]</span> Étape 8/9 : Mises à jour auto &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="t-ok">[OK]</span></div>
+<div class="terminal-line"><span class="t-step">[>]</span> Étape 9/9 : Dashboard MOTD &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="t-ok">[OK]</span></div>
+<div class="terminal-line">&nbsp;</div>
+<div class="terminal-line"><span class="t-bold">=== VOTRE SERVEUR EST PRÊT ! ===</span></div>
+<div class="terminal-line">&nbsp;&nbsp;Connectez-vous : <span class="t-cmd">ssh deploy@votre-ip</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ======== FEATURES ======== -->
+<section class="section fade-in" id="features">
+  <div class="container">
+    <h2 class="section-title" style="text-align:center">
+      <span lang="en">From setup to production</span>
+      <span lang="fr">Du setup à la production</span>
+    </h2>
+    <p class="section-subtitle" style="text-align:center">
+      <span lang="en">4 scripts that guide you step by step. No config files, no manual install.</span>
+      <span lang="fr">4 scripts qui vous guident étape par étape. Pas de fichier de config, pas d'installation manuelle.</span>
+    </p>
+
+    <div class="features-grid">
+      <!-- Secure -->
+      <div class="feature-card">
+        <svg class="feature-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        <h3>
+          <span lang="en">Prepare your server</span>
+          <span lang="fr">Préparez votre serveur</span>
+        </h3>
+        <div class="feature-script">setup.sh</div>
+        <p>
+          <span lang="en">You just bought a VPS? The script secures it, creates a protected user, installs Docker, a firewall and everything you need. You answer a few questions, it does the rest.</span>
+          <span lang="fr">Vous venez d'acheter un VPS ? Le script le sécurise, crée un utilisateur protégé, installe Docker, un pare-feu et tout ce qu'il faut. Vous répondez à quelques questions, il fait le reste.</span>
+        </p>
+      </div>
+
+      <!-- Deploy -->
+      <div class="feature-card">
+        <svg class="feature-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+        <h3>
+          <span lang="en">Deploy your apps</span>
+          <span lang="fr">Déployez vos apps</span>
+        </h3>
+        <div class="feature-script">deploy.sh</div>
+        <p>
+          <span lang="en">Give it your GitHub repo and a domain name. The script pulls your code, builds it with Docker, and puts it online with an SSL certificate. Works with public and private repos.</span>
+          <span lang="fr">Donnez-lui votre repo GitHub et un nom de domaine. Le script récupère votre code, le construit avec Docker et le met en ligne avec un certificat SSL. Fonctionne avec les repos publics et privés.</span>
+        </p>
+      </div>
+
+      <!-- Monitor -->
+      <div class="feature-card">
+        <svg class="feature-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/><path d="M7 13l3-3 2 2 5-5"/></svg>
+        <h3>
+          <span lang="en">Check the status</span>
+          <span lang="fr">Vérifiez l'état</span>
+        </h3>
+        <div class="feature-script">status.sh</div>
+        <p>
+          <span lang="en">See at a glance if your server and apps are running. Disk space, memory, which apps are online, which domain points where.</span>
+          <span lang="fr">Voyez en un coup d'oeil si votre serveur et vos apps tournent. Espace disque, mémoire, quelles apps sont en ligne, quel domaine pointe où.</span>
+        </p>
+      </div>
+
+      <!-- Backup -->
+      <div class="feature-card">
+        <svg class="feature-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        <h3>
+          <span lang="en">Backup everything</span>
+          <span lang="fr">Sauvegardez tout</span>
+        </h3>
+        <div class="feature-script">backup.sh</div>
+        <p>
+          <span lang="en">Save your apps, their data and their settings to your computer. If something goes wrong, restore everything in one command.</span>
+          <span lang="fr">Sauvegardez vos apps, leurs données et leurs réglages sur votre ordinateur. Si quelque chose casse, restaurez tout en une commande.</span>
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ======== HOW IT WORKS ======== -->
+<section class="section fade-in" id="how-it-works">
+  <div class="container">
+    <h2 class="section-title" style="text-align:center">
+      <span lang="en">How it works</span>
+      <span lang="fr">Comment ça marche</span>
+    </h2>
+    <p class="section-subtitle" style="text-align:center">
+      <span lang="en">From a brand new VPS to your app online in minutes.</span>
+      <span lang="fr">D'un VPS tout neuf à votre app en ligne en quelques minutes.</span>
+    </p>
+
+    <div class="steps">
+      <div class="step">
+        <div class="step-number">1</div>
+        <h3>
+          <span lang="en">Copy the command</span>
+          <span lang="fr">Copiez la commande</span>
+        </h3>
+        <p>
+          <span lang="en">Paste it in your terminal. Nothing to install, nothing to configure.</span>
+          <span lang="fr">Collez-la dans votre terminal. Rien à installer, rien à configurer.</span>
+        </p>
+      </div>
+      <div class="step">
+        <div class="step-number">2</div>
+        <h3>
+          <span lang="en">Enter your server IP</span>
+          <span lang="fr">Entrez l'IP de votre serveur</span>
+        </h3>
+        <p>
+          <span lang="en">The one your hosting provider gave you. The script connects and sets up everything automatically.</span>
+          <span lang="fr">Celle que votre hébergeur vous a donnée. Le script se connecte et installe tout automatiquement.</span>
+        </p>
+      </div>
+      <div class="step">
+        <div class="step-number">3</div>
+        <h3>
+          <span lang="en">Deploy your app</span>
+          <span lang="fr">Déployez votre app</span>
+        </h3>
+        <p>
+          <span lang="en">Your server is ready. Run deploy.sh, give it your GitHub repo and domain. Your app is live.</span>
+          <span lang="fr">Votre serveur est prêt. Lancez deploy.sh, donnez votre repo GitHub et votre domaine. Votre app est en ligne.</span>
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ======== DISTRIBUTIONS ======== -->
+<section class="section fade-in" id="distros">
+  <div class="container">
+    <h2 class="section-title" style="text-align:center">
+      <span lang="en">Supported distributions</span>
+      <span lang="fr">Distributions supportées</span>
+    </h2>
+    <p class="section-subtitle" style="text-align:center">
+      <span lang="en">Works with the most popular Linux systems. The script detects yours and adapts automatically.</span>
+      <span lang="fr">Compatible avec les systèmes Linux les plus populaires. Le script détecte le vôtre et s'adapte automatiquement.</span>
+    </p>
+
+    <div class="distros">
+      <div class="distro-badge"><span class="distro-dot"></span> Ubuntu</div>
+      <div class="distro-badge"><span class="distro-dot"></span> Debian</div>
+      <div class="distro-badge"><span class="distro-dot"></span> AlmaLinux</div>
+      <div class="distro-badge"><span class="distro-dot"></span> Rocky</div>
+      <div class="distro-badge"><span class="distro-dot"></span> CentOS</div>
+      <div class="distro-badge"><span class="distro-dot"></span> Fedora</div>
+    </div>
+  </div>
+</section>
+
+<!-- ======== QUICK START ======== -->
+<section class="section fade-in" id="quickstart">
+  <div class="container">
+    <h2 class="section-title" style="text-align:center">Quick Start</h2>
+    <p class="section-subtitle" style="text-align:center">
+      <span lang="en">Choose your OS and run the command.</span>
+      <span lang="fr">Choisissez votre OS et lancez la commande.</span>
+    </p>
+
+    <div style="max-width:700px;margin:0 auto">
+      <div class="tabs" role="tablist">
+        <button class="tab-btn active" data-tab="tab-macos" role="tab" aria-selected="true">macOS / Linux</button>
+        <button class="tab-btn" data-tab="tab-gitbash" role="tab" aria-selected="false">Git Bash</button>
+        <button class="tab-btn" data-tab="tab-wsl" role="tab" aria-selected="false">WSL</button>
+        <button class="tab-btn" data-tab="tab-powershell" role="tab" aria-selected="false">PowerShell</button>
+      </div>
+
+      <!-- macOS / Linux -->
+      <div class="tab-panel active" id="tab-macos" role="tabpanel">
+        <div class="code-block">
+          <code>bash &lt;(curl -sL https://raw.githubusercontent.com/mariusdjen/vpskit/main/vpskit.sh)</code>
+          <button class="copy-btn" data-copy="bash <(curl -sL https://raw.githubusercontent.com/mariusdjen/vpskit/main/vpskit.sh)" aria-label="Copy">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+          </button>
+        </div>
+        <p class="tab-note">
+          <span lang="en">Works out of the box. No dependencies needed.</span>
+          <span lang="fr">Fonctionne directement. Aucune dépendance requise.</span>
+        </p>
+      </div>
+
+      <!-- Git Bash -->
+      <div class="tab-panel" id="tab-gitbash" role="tabpanel">
+        <p class="tab-note" style="margin-bottom:12px">
+          <span lang="en">1. Install <a href="https://git-scm.com/download/win" target="_blank" rel="noopener">Git for Windows</a></span>
+          <span lang="fr">1. Installez <a href="https://git-scm.com/download/win" target="_blank" rel="noopener">Git for Windows</a></span>
+        </p>
+        <p class="tab-note" style="margin-bottom:12px">
+          <span lang="en">2. Open <strong>Git Bash</strong></span>
+          <span lang="fr">2. Ouvrez <strong>Git Bash</strong></span>
+        </p>
+        <p class="tab-note" style="margin-bottom:12px">
+          <span lang="en">3. Run:</span>
+          <span lang="fr">3. Lancez :</span>
+        </p>
+        <div class="code-block">
+          <code>bash &lt;(curl -sL https://raw.githubusercontent.com/mariusdjen/vpskit/main/vpskit.sh)</code>
+          <button class="copy-btn" data-copy="bash <(curl -sL https://raw.githubusercontent.com/mariusdjen/vpskit/main/vpskit.sh)" aria-label="Copy">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- WSL -->
+      <div class="tab-panel" id="tab-wsl" role="tabpanel">
+        <p class="tab-note" style="margin-bottom:12px">
+          <span lang="en">1. Enable WSL (PowerShell as admin):</span>
+          <span lang="fr">1. Activez WSL (PowerShell en admin) :</span>
+        </p>
+        <div class="code-block">
+          <code>wsl --install</code>
+          <button class="copy-btn" data-copy="wsl --install" aria-label="Copy">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+          </button>
+        </div>
+        <p class="tab-note" style="margin-bottom:12px">
+          <span lang="en">2. Open Ubuntu terminal, then run:</span>
+          <span lang="fr">2. Ouvrez le terminal Ubuntu, puis lancez :</span>
+        </p>
+        <div class="code-block">
+          <code>bash &lt;(curl -sL https://raw.githubusercontent.com/mariusdjen/vpskit/main/vpskit.sh)</code>
+          <button class="copy-btn" data-copy="bash <(curl -sL https://raw.githubusercontent.com/mariusdjen/vpskit/main/vpskit.sh)" aria-label="Copy">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- PowerShell -->
+      <div class="tab-panel" id="tab-powershell" role="tabpanel">
+        <div class="code-block">
+          <code>curl.exe -sL https://raw.githubusercontent.com/mariusdjen/vpskit/main/vpskit.sh -o setup.sh
+wsl bash setup.sh</code>
+          <button class="copy-btn" data-copy="curl.exe -sL https://raw.githubusercontent.com/mariusdjen/vpskit/main/vpskit.sh -o setup.sh&#10;wsl bash setup.sh" aria-label="Copy">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+          </button>
+        </div>
+        <p class="tab-note">
+          <span lang="en">Requires WSL installed. Downloads and runs via WSL.</span>
+          <span lang="fr">Nécessite WSL installé. Télécharge et exécute via WSL.</span>
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ======== ROADMAP ======== -->
+<section class="section fade-in" id="roadmap">
+  <div class="container">
+    <h2 class="section-title" style="text-align:center">Roadmap</h2>
+    <p class="section-subtitle" style="text-align:center">
+      <span lang="en">What's coming next for the vpskit ecosystem.</span>
+      <span lang="fr">Les prochaines étapes de l'écosystème vpskit.</span>
+    </p>
+
+    <div class="timeline">
+      <!-- vps-monitor -->
+      <div class="timeline-item next">
+        <div class="timeline-dot"></div>
+        <span class="timeline-badge badge-next">Next</span>
+        <h3>vps-monitor</h3>
+        <p>
+          <span lang="en">Get notified when something goes wrong. Automatic checks on your server and apps, with alerts on Telegram, Discord or email.</span>
+          <span lang="fr">Soyez prévenu quand quelque chose ne va pas. Vérifications automatiques de votre serveur et vos apps, avec alertes sur Telegram, Discord ou email.</span>
+        </p>
+      </div>
+
+      <!-- vps-db -->
+      <div class="timeline-item">
+        <div class="timeline-dot"></div>
+        <span class="timeline-badge badge-planned">Planned</span>
+        <h3>vps-db</h3>
+        <p>
+          <span lang="en">Add a database to your server in one command. PostgreSQL, MySQL or Redis, with automatic backups and ready-to-use connection details.</span>
+          <span lang="fr">Ajoutez une base de données à votre serveur en une commande. PostgreSQL, MySQL ou Redis, avec sauvegardes automatiques et identifiants prêts à l'emploi.</span>
+        </p>
+      </div>
+
+      <!-- vps-migrate -->
+      <div class="timeline-item">
+        <div class="timeline-dot"></div>
+        <span class="timeline-badge badge-planned">Planned</span>
+        <h3>vps-migrate</h3>
+        <p>
+          <span lang="en">Move all your apps from one server to another. The script backs up everything, sets up the new server and restores your apps automatically.</span>
+          <span lang="fr">Déplacez toutes vos apps d'un serveur à un autre. Le script sauvegarde tout, prépare le nouveau serveur et restaure vos apps automatiquement.</span>
+        </p>
+      </div>
+
+      <!-- vps-scale -->
+      <div class="timeline-item exploring">
+        <div class="timeline-dot"></div>
+        <span class="timeline-badge badge-exploring">Exploring</span>
+        <h3>vps-scale</h3>
+        <p>
+          <span lang="en">Deploy your app on multiple servers at once to handle more traffic. Automatic load balancing between your servers.</span>
+          <span lang="fr">Déployez votre app sur plusieurs serveurs à la fois pour gérer plus de trafic. Répartition automatique de la charge entre vos serveurs.</span>
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ======== FOOTER ======== -->
+<footer class="footer">
+  <div class="container">
+    <div class="footer-links">
+      <a href="https://github.com/mariusdjen/vpskit" target="_blank" rel="noopener">GitHub</a>
+      <a href="https://github.com/mariusdjen/vpskit/issues" target="_blank" rel="noopener">Issues</a>
+      <a href="https://ko-fi.com/mariusdjn" target="_blank" rel="noopener">
+        <span lang="en">Donate</span>
+        <span lang="fr">Soutenir</span>
+      </a>
+      <a href="https://github.com/mariusdjen" target="_blank" rel="noopener">Marius Djen</a>
+    </div>
+    <p class="footer-copy">
+      MIT License &middot; v2.3.1 &middot; Made by <a href="https://github.com/mariusdjen" target="_blank" rel="noopener">mariusdjen</a>
+    </p>
+  </div>
+</footer>
+
+<script src="script.js"></script>
+</body>
+</html>
