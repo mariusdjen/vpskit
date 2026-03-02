@@ -25,8 +25,8 @@ err()     { echo -e "${RED}[ERR] $1${NC}"; }
 step()    { echo -e "\n${BOLD}${YELLOW}[>] $1${NC}\n  $2\n"; }
 
 confirm() {
-    read -p "  Continuer ? (o/N) : " REPLY
-    [[ "$REPLY" == "o" || "$REPLY" == "O" ]]
+    read -p "  $MSG_SETUP_NEW_STEP3_CONFIRM" REPLY
+    [[ "$REPLY" == "o" || "$REPLY" == "O" || "$REPLY" == "y" || "$REPLY" == "Y" ]]
 }
 
 # Echapper les caracteres speciaux pour sed (evite l'injection de commandes)
@@ -62,47 +62,53 @@ detect_os() {
 
 detect_os
 
+# --- Chargement de la langue ---
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)"
+if [ -f "${SCRIPT_DIR}/lang.sh" ]; then
+    . "${SCRIPT_DIR}/lang.sh"
+fi
+
 echo ""
 echo "========================================="
 echo -e "  ${BOLD}VPS BOOTSTRAP${NC}"
-echo "  Sécurise et prépare un VPS Linux"
-echo "  neuf, de A à Z."
+echo "  $MSG_SETUP_BANNER_SUBTITLE"
+echo "  $MSG_SETUP_BANNER_SUBTITLE2"
 echo ""
-echo "  Par Marius Djenontin"
-echo "  marius-djenontin.com"
+echo "  $MSG_SETUP_BANNER_AUTHOR"
+echo "  $MSG_SETUP_BANNER_WEBSITE"
 echo "========================================="
 echo ""
 
 case "$OS" in
-    mac)      info "Système détecté : macOS" ;;
-    linux)    info "Système détecté : Linux" ;;
-    windows)  info "Système détecté : Windows (Git Bash)" ;;
-    wsl)      info "Système détecté : Windows (WSL)" ;;
+    mac)      info "$MSG_SETUP_OS_MAC" ;;
+    linux)    info "$MSG_SETUP_OS_LINUX" ;;
+    windows)  info "$MSG_SETUP_OS_WINDOWS_GITBASH" ;;
+    wsl)      info "$MSG_SETUP_OS_WSL" ;;
     *)
-        err "Système non reconnu."
-        echo "  Ce script fonctionne sur :"
-        echo "    - macOS (Terminal)"
-        echo "    - Linux (Terminal)"
-        echo "    - Windows (Git Bash ou WSL)"
+        err "$MSG_SETUP_OS_UNKNOWN_ERR"
+        echo "  $MSG_SETUP_OS_UNKNOWN_COMPAT"
+        echo "  $MSG_SETUP_OS_UNKNOWN_MACOS"
+        echo "  $MSG_SETUP_OS_UNKNOWN_LINUX"
+        echo "  $MSG_SETUP_OS_UNKNOWN_WINDOWS"
         echo ""
-        echo "  Sur Windows sans Git Bash :"
-        echo "    1. Installez Git : https://git-scm.com/download/win"
-        echo "    2. Ouvrez 'Git Bash'"
-        echo "    3. Relancez ce script"
+        echo "  $MSG_SETUP_OS_WINDOWS_INSTALL"
+        echo "    $MSG_SETUP_OS_WINDOWS_STEP1"
+        echo "    $MSG_SETUP_OS_WINDOWS_STEP2"
+        echo "    $MSG_SETUP_OS_WINDOWS_STEP3"
         exit 1
         ;;
 esac
 
 # --- Vérifier que ssh est disponible ---
 if ! command -v ssh &>/dev/null; then
-    err "La commande 'ssh' n'est pas disponible."
+    err "$MSG_SETUP_SSH_NOT_FOUND_ERR"
     case "$OS" in
         windows)
-            echo "  Installez Git Bash : https://git-scm.com/download/win"
-            echo "  Ou activez OpenSSH : Paramètres > Applications > Fonctionnalités facultatives > OpenSSH Client"
+            echo "  $MSG_SETUP_SSH_INSTALL_WINDOWS"
+            echo "  $MSG_SETUP_SSH_INSTALL_WINDOWS_ALT"
             ;;
         *)
-            echo "  Installez OpenSSH : sudo apt install openssh-client"
+            echo "  $MSG_SETUP_SSH_INSTALL_OTHER"
             ;;
     esac
     exit 1
@@ -131,7 +137,7 @@ select_ssh_key() {
     done
 
     if [ ${#KEYS[@]} -gt 0 ]; then
-        info "Clés SSH trouvées sur votre machine :"
+        info "$MSG_SETUP_SSH_KEYS_FOUND"
         echo ""
         for i in "${!KEYS[@]}"; do
             KEYNAME=$(basename "${KEYS[$i]}")
@@ -141,34 +147,34 @@ select_ssh_key() {
         done
         NEW_NUM=$((${#KEYS[@]} + 1))
         echo ""
-        echo -e "  ${NEW_NUM}) ${YELLOW}Créer une nouvelle clé${NC}"
+        echo -e "  ${NEW_NUM}) ${YELLOW}${MSG_SETUP_SSH_KEY_CREATE_NEW}${NC}"
         echo ""
-        read -p "  Votre choix (1-${NEW_NUM}) : " KEY_CHOICE
+        read -p "  $(printf "$MSG_SETUP_SSH_KEY_PROMPT_CHOICE" "$NEW_NUM")" KEY_CHOICE
 
         if [[ "$KEY_CHOICE" == "$NEW_NUM" ]]; then
-            read -p "  Nom de la nouvelle clé (défaut: vps) : " CUSTOM_KEY_NAME
+            read -p "  $MSG_SETUP_SSH_KEY_PROMPT_NEW_NAME" CUSTOM_KEY_NAME
             CUSTOM_KEY_NAME=${CUSTOM_KEY_NAME:-vps}
             SSH_KEY="$SSH_DIR/$CUSTOM_KEY_NAME"
             ssh-keygen -t ed25519 -C "vps-bootstrap" -f "$SSH_KEY"
-            success "Nouvelle clé créée : $SSH_KEY"
+            success "$(printf "$MSG_SETUP_SSH_KEY_CREATED" "$SSH_KEY")"
         elif [[ "$KEY_CHOICE" =~ ^[0-9]+$ ]] && [ "$KEY_CHOICE" -ge 1 ] && [ "$KEY_CHOICE" -le "${#KEYS[@]}" ]; then
             SSH_KEY="${KEYS[$((KEY_CHOICE - 1))]}"
-            success "Clé sélectionnée : $(basename "$SSH_KEY")"
+            success "$(printf "$MSG_SETUP_SSH_KEY_SELECTED" "$(basename "$SSH_KEY")")"
         else
-            echo -e "${RED}Choix invalide. Annulé.${NC}"
+            echo -e "${RED}${MSG_SETUP_SSH_KEY_INVALID_CHOICE}${NC}"
             exit 1
         fi
     else
-        info "Aucune clé SSH trouvée. On va en créer une."
+        info "$MSG_SETUP_SSH_NO_KEY_FOUND"
         echo ""
-        read -p "  Nom de la clé (défaut: id_ed25519) : " CUSTOM_KEY_NAME
+        read -p "  $MSG_SETUP_SSH_KEY_PROMPT_NAME" CUSTOM_KEY_NAME
         if [[ -n "$CUSTOM_KEY_NAME" ]]; then
             SSH_KEY="$SSH_DIR/$CUSTOM_KEY_NAME"
         else
             SSH_KEY="$SSH_DIR/id_ed25519"
         fi
         ssh-keygen -t ed25519 -C "vps-bootstrap" -f "$SSH_KEY"
-        success "Clé SSH créée : $SSH_KEY"
+        success "$(printf "$MSG_SETUP_SSH_KEY_CREATED_NEW" "$SSH_KEY")"
     fi
 }
 
@@ -185,13 +191,13 @@ if [ -f "$LOCAL_STATE" ]; then
     USERNAME=$(read_state_var "$LOCAL_STATE" "USERNAME")
     if [[ -n "${VPS_IP:-}" && -n "${SSH_KEY:-}" && -n "${USERNAME:-}" ]]; then
         echo ""
-        warn "Session précédente détectée :"
-        echo "    IP       : $VPS_IP"
-        echo "    Clé SSH  : $(basename "$SSH_KEY")"
-        echo "    User     : $USERNAME"
+        warn "$MSG_SETUP_SESSION_DETECTED"
+        echo "    $(printf "$MSG_SETUP_SESSION_IP" "$VPS_IP")"
+        echo "    $(printf "$MSG_SETUP_SESSION_KEY" "$(basename "$SSH_KEY")")"
+        echo "    $(printf "$MSG_SETUP_SESSION_USER" "$USERNAME")"
         echo ""
-        read -p "  Reprendre cette session ? (o/N) : " RESUME_REPLY
-        if [[ "$RESUME_REPLY" == "o" || "$RESUME_REPLY" == "O" ]]; then
+        read -p "  $MSG_SETUP_SESSION_RESUME_PROMPT" RESUME_REPLY
+        if [[ "$RESUME_REPLY" == "o" || "$RESUME_REPLY" == "O" || "$RESUME_REPLY" == "y" || "$RESUME_REPLY" == "Y" ]]; then
             MODE="update"
         fi
     fi
@@ -200,10 +206,10 @@ fi
 # Sinon, demander le mode
 if [ -z "$MODE" ]; then
     echo ""
-    echo "  1) Configurer un nouveau VPS"
-    echo "  2) Mettre à jour un VPS déjà configuré"
+    echo "  $MSG_SETUP_MODE_NEW"
+    echo "  $MSG_SETUP_MODE_UPDATE"
     echo ""
-    read -p "  Votre choix (1/2) : " MODE_CHOICE
+    read -p "  $MSG_SETUP_MODE_PROMPT" MODE_CHOICE
     case "$MODE_CHOICE" in
         2) MODE="update" ;;
         *) MODE="new" ;;
@@ -217,71 +223,66 @@ fi
 if [ "$MODE" = "new" ]; then
 
     echo ""
-    echo -e "${BOLD}=== PARTIE 1 : PRÉPARATION (sur votre machine) ===${NC}"
+    echo -e "${BOLD}${MSG_SETUP_NEW_PART1_TITLE}${NC}"
 
     # --- Clé SSH ---
-    step "Étape 1/3 : Clé SSH" "Une clé SSH est comme un badge d'accès. Au lieu d'un mot de passe,
-  votre machine prouve son identité avec cette clé. C'est plus sûr et
-  impossible à deviner par un pirate."
+    step "$MSG_SETUP_NEW_STEP1_TITLE" "$(echo -e "$MSG_SETUP_NEW_STEP1_DESC")"
 
     select_ssh_key
 
     echo ""
-    info "Clé publique (celle qui sera envoyée au serveur) :"
+    info "$MSG_SETUP_NEW_PUBKEY_INFO"
     echo ""
     echo "  $(cat "${SSH_KEY}.pub")"
     echo ""
 
     # --- IP du serveur ---
-    step "Étape 2/3 : Adresse du serveur" "Entrez l'adresse IP de votre VPS.
-  Vous la trouvez dans le dashboard de votre hébergeur (Hostinger, OVH, DigitalOcean, etc.)."
+    step "$MSG_SETUP_NEW_STEP2_TITLE" "$(echo -e "$MSG_SETUP_NEW_STEP2_DESC")"
 
-    read -p "  Adresse IP du VPS : " VPS_IP
+    read -p "  $MSG_SETUP_NEW_IP_PROMPT" VPS_IP
 
     if [[ -z "$VPS_IP" ]]; then
-        err "Adresse IP requise. Annulé."
+        err "$MSG_SETUP_NEW_IP_REQUIRED_ERR"
         exit 1
     fi
 
     if ! echo "$VPS_IP" | grep -qE '^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$'; then
-        err "Adresse IP invalide : $VPS_IP"
-        echo "  L'adresse doit être au format : 123.45.67.89"
+        err "$(printf "$MSG_SETUP_NEW_IP_INVALID_ERR" "$VPS_IP")"
+        echo "  $MSG_SETUP_NEW_IP_FORMAT"
         exit 1
     fi
 
     # --- Envoyer la clé SSH ---
-    step "Étape 3/3 : Envoi de la clé SSH sur le serveur" "On va envoyer votre clé publique sur le VPS pour pouvoir
-  se connecter sans mot de passe par la suite.
-  Il vous demandera le mot de passe root UNE DERNIÈRE FOIS."
+    step "$MSG_SETUP_NEW_STEP3_TITLE" "$(echo -e "$MSG_SETUP_NEW_STEP3_DESC")"
 
     if confirm; then
         if command -v ssh-copy-id &>/dev/null; then
             ssh-copy-id -i "${SSH_KEY}.pub" "root@${VPS_IP}"
         else
-            info "Envoi manuel de la clé (ssh-copy-id non disponible)..."
+            info "$MSG_SETUP_NEW_STEP3_MANUAL_SEND"
             cat "${SSH_KEY}.pub" | ssh "root@${VPS_IP}" "mkdir -p ~/.ssh && chmod 700 ~/.ssh && cat >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys"
         fi
-        success "Clé SSH envoyée sur le serveur."
+        success "$MSG_SETUP_NEW_STEP3_SUCCESS"
     else
-        warn "Étape ignorée. Assurez-vous que votre clé est sur le serveur."
+        warn "$MSG_SETUP_NEW_STEP3_SKIPPED"
     fi
 
     # --- Test de connexion ---
     echo ""
-    info "Test de connexion SSH..."
+    info "$MSG_SETUP_NEW_CONNTEST_INFO"
     if ssh -i "$SSH_KEY" -o ConnectTimeout=5 -o BatchMode=yes "root@${VPS_IP}" "echo ok" &>/dev/null; then
-        success "Connexion SSH réussie !"
+        success "$MSG_SETUP_NEW_CONNTEST_OK"
     else
-        err "Impossible de se connecter. Vérifiez l'IP et que la clé est bien sur le serveur."
+        err "$MSG_SETUP_NEW_CONNTEST_ERR"
         exit 1
     fi
 
     # --- Nom d'utilisateur ---
     echo ""
-    echo -e "${BOLD}=== PARTIE 2 : SÉCURISATION DU VPS ===${NC}"
+    echo -e "${BOLD}${MSG_SETUP_NEW_PART2_TITLE}${NC}"
     echo ""
 
-    read -p "Nom d'utilisateur à créer sur le serveur (défaut: deploy) : " USERNAME
+    read -p "$MSG_SETUP_NEW_USERNAME_PROMPT" USERNAME
     USERNAME=${USERNAME:-deploy}
 
     SSH_USER="root"
@@ -294,7 +295,7 @@ if [ "$MODE" = "new" ]; then
 elif [ "$MODE" = "update" ]; then
 
     echo ""
-    echo -e "${BOLD}=== MISE À JOUR DU VPS ===${NC}"
+    echo -e "${BOLD}${MSG_SETUP_UPDATE_TITLE}${NC}"
 
     # Si pas de session sauvegardée, demander les infos
     if [ -z "${SSH_KEY:-}" ]; then
@@ -304,37 +305,37 @@ elif [ "$MODE" = "update" ]; then
 
     if [ -z "${VPS_IP:-}" ]; then
         echo ""
-        read -p "  Adresse IP du VPS : " VPS_IP
+        read -p "  $MSG_SETUP_UPDATE_IP_PROMPT" VPS_IP
         if [[ -z "$VPS_IP" ]]; then
-            err "Adresse IP requise. Annulé."
+            err "$MSG_SETUP_UPDATE_IP_REQUIRED_ERR"
             exit 1
         fi
         if ! echo "$VPS_IP" | grep -qE '^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$'; then
-            err "Adresse IP invalide : $VPS_IP"
-            echo "  L'adresse doit être au format : 123.45.67.89"
+            err "$(printf "$MSG_SETUP_UPDATE_IP_INVALID_ERR" "$VPS_IP")"
+            echo "  $MSG_SETUP_UPDATE_IP_FORMAT"
             exit 1
         fi
     fi
 
     if [ -z "${USERNAME:-}" ]; then
-        read -p "  Nom d'utilisateur sur le serveur (défaut: deploy) : " USERNAME
+        read -p "  $MSG_SETUP_UPDATE_USERNAME_PROMPT" USERNAME
         USERNAME=${USERNAME:-deploy}
     fi
 
     # --- Test de connexion (user d'abord, root en fallback) ---
     echo ""
-    info "Test de connexion au serveur..."
+    info "$MSG_SETUP_UPDATE_CONNTEST_INFO"
     if ssh -i "$SSH_KEY" -o ConnectTimeout=5 -o BatchMode=yes "${USERNAME}@${VPS_IP}" "echo ok" &>/dev/null; then
         SSH_USER="$USERNAME"
         USE_SUDO=true
-        success "Connecté en tant que $USERNAME."
+        success "$(printf "$MSG_SETUP_UPDATE_CONNTEST_USER_OK" "$USERNAME")"
     elif ssh -i "$SSH_KEY" -o ConnectTimeout=5 -o BatchMode=yes "root@${VPS_IP}" "echo ok" &>/dev/null; then
         SSH_USER="root"
         USE_SUDO=false
-        success "Connecté en tant que root."
+        success "$MSG_SETUP_UPDATE_CONNTEST_ROOT_OK"
     else
-        err "Impossible de se connecter (ni $USERNAME, ni root)."
-        echo "  Vérifiez l'IP, la clé SSH et le nom d'utilisateur."
+        err "$(printf "$MSG_SETUP_UPDATE_CONNTEST_ERR" "$USERNAME")"
+        echo "  $MSG_SETUP_UPDATE_CONNTEST_HINT"
         exit 1
     fi
 
@@ -394,21 +395,21 @@ detect_distro() {
         esac
     else
         DISTRO_FAMILY="unknown"
-        DISTRO_NAME="inconnu"
+        DISTRO_NAME="unknown"
     fi
 }
 
 detect_distro
 
 if [ "$DISTRO_FAMILY" = "unknown" ]; then
-    err "Distribution non supportée : ${DISTRO_NAME}"
-    echo "  Distributions supportées :"
-    echo "    - Ubuntu, Debian (famille APT)"
-    echo "    - AlmaLinux, Rocky Linux, CentOS, Fedora (famille DNF)"
+    echo -e "${RED}[ERR] $(printf "$RMSG_SETUP_DISTRO_UNKNOWN_ERR" "${DISTRO_NAME}")${NC}"
+    echo "  $RMSG_SETUP_DISTRO_SUPPORTED"
+    echo "  $RMSG_SETUP_DISTRO_DEBIAN"
+    echo "  $RMSG_SETUP_DISTRO_RHEL"
     exit 1
 fi
 
-echo -e "${BLUE}[INFO] Distribution détectée : ${DISTRO_NAME} (famille ${DISTRO_FAMILY})${NC}"
+echo -e "${BLUE}[INFO] $(printf "$RMSG_SETUP_DISTRO_DETECTED" "${DISTRO_NAME}" "${DISTRO_FAMILY}")${NC}"
 
 # =========================================
 # FONCTIONS D'ABSTRACTION
@@ -552,7 +553,7 @@ IP=$(hostname -I 2>/dev/null | awk "{print \$1}" || echo "N/A")
 
 if command -v docker &>/dev/null; then
     DOCKER_COUNT=$(docker ps -q 2>/dev/null | wc -l | tr -d " ")
-    DOCKER_LINE="  Docker     : ${DOCKER_COUNT} conteneur(s) actif(s)"
+    DOCKER_LINE="  Docker     : __MOTD_DOCKER__"
 else
     DOCKER_LINE=""
 fi
@@ -572,10 +573,10 @@ echo ""
 echo "  Uptime     : ${UPTIME}"
 echo "  Load       : ${LOAD}"
 echo ""
-echo "  CPU        : ${CPU_CORES} coeur(s)"
-echo -e "  RAM        : ${RAM_USED} Mo / ${RAM_TOTAL} Mo ($(color_pct $RAM_PCT))"
-echo -e "  Swap       : ${SWAP_USED} Mo / ${SWAP_TOTAL} Mo ($(color_pct $SWAP_PCT))"
-echo -e "  Disque     : ${DISK_USED} / ${DISK_TOTAL} ($(color_pct $DISK_PCT))"
+echo "  CPU        : ${CPU_CORES} __MOTD_CORES__"
+echo -e "  RAM        : ${RAM_USED} __MOTD_RAM_UNIT__ / ${RAM_TOTAL} __MOTD_RAM_UNIT__ ($(color_pct $RAM_PCT))"
+echo -e "  Swap       : ${SWAP_USED} __MOTD_RAM_UNIT__ / ${SWAP_TOTAL} __MOTD_RAM_UNIT__ ($(color_pct $SWAP_PCT))"
+echo -e "  __MOTD_DISK__     : ${DISK_USED} / ${DISK_TOTAL} ($(color_pct $DISK_PCT))"
 echo ""
 echo "  IP         : ${IP}"
 if [ -n "$DOCKER_LINE" ]; then
@@ -584,6 +585,13 @@ fi
 echo "========================================="
 echo ""
 '
+
+    # Remplacer les placeholders MOTD par les labels traduits
+    MOTD_DOCKER_LABEL=$(printf "$RMSG_MOTD_DOCKER" "\${DOCKER_COUNT}")
+    MOTD_SCRIPT="${MOTD_SCRIPT//__MOTD_CORES__/$RMSG_MOTD_CORES}"
+    MOTD_SCRIPT="${MOTD_SCRIPT//__MOTD_RAM_UNIT__/$RMSG_MOTD_RAM_UNIT}"
+    MOTD_SCRIPT="${MOTD_SCRIPT//__MOTD_DISK__/$RMSG_MOTD_DISK}"
+    MOTD_SCRIPT="${MOTD_SCRIPT//__MOTD_DOCKER__/$MOTD_DOCKER_LABEL}"
 
     case "$DISTRO_FAMILY" in
         debian)
@@ -615,8 +623,8 @@ confirm_step() {
     echo -e "${YELLOW}[>] $1${NC}"
     echo "  $2"
     echo ""
-    read -p "  Exécuter ? (o/N) : " REPLY
-    [[ "$REPLY" == "o" || "$REPLY" == "O" ]]
+    read -p "  $RMSG_SETUP_STEP_EXECUTE_PROMPT" REPLY
+    [[ "$REPLY" == "o" || "$REPLY" == "O" || "$REPLY" == "y" || "$REPLY" == "Y" ]]
 }
 
 done_step() {
@@ -624,7 +632,7 @@ done_step() {
 }
 
 skip_step() {
-    echo -e "  ${GREEN}[OK] $1 (déjà fait)${NC}"
+    echo -e "  ${GREEN}[OK] $1 $RMSG_SETUP_STEP_ALREADY_DONE${NC}"
 }
 
 # =========================================
@@ -633,42 +641,42 @@ skip_step() {
 
 # === 1/9 ===
 if is_done "step1"; then
-    skip_step "Étape 1/9 : Mise à jour système"
-elif confirm_step "Étape 1/9 : Mise à jour système" "Met à jour tous les paquets et installe git, curl, wget."; then
+    skip_step "$RMSG_SETUP_STEP1_TITLE"
+elif confirm_step "$RMSG_SETUP_STEP1_TITLE" "$RMSG_SETUP_STEP1_DESC"; then
     pkg_update
     pkg_install git curl wget
     mark_done "step1"
-    done_step "Système à jour, git/curl/wget installés."
+    done_step "$RMSG_SETUP_STEP1_DONE"
 fi
 
 # === 2/9 ===
 if is_done "step2"; then
-    skip_step "Étape 2/9 : Création utilisateur $USERNAME"
-elif confirm_step "Étape 2/9 : Création utilisateur $USERNAME" "Crée un utilisateur non-root avec accès sudo."; then
+    skip_step "$(printf "$RMSG_SETUP_STEP2_TITLE" "$USERNAME")"
+elif confirm_step "$(printf "$RMSG_SETUP_STEP2_TITLE" "$USERNAME")" "$RMSG_SETUP_STEP2_DESC"; then
     if ! id "$USERNAME" &>/dev/null; then
         create_user "$USERNAME"
-        done_step "Utilisateur $USERNAME créé avec sudo."
+        done_step "$(printf "$RMSG_SETUP_STEP2_CREATED" "$USERNAME")"
     else
-        echo -e "  ${BLUE}[INFO] L'utilisateur $USERNAME existe déjà. Vérification des droits...${NC}"
+        echo -e "  ${BLUE}[INFO] $(printf "$RMSG_SETUP_STEP2_ALREADY_EXISTS" "$USERNAME")${NC}"
         SUDO_GRP=$(sudo_group)
         if ! groups "$USERNAME" | grep -q "$SUDO_GRP"; then
             usermod -aG "$SUDO_GRP" "$USERNAME"
-            echo -e "  ${BLUE}[INFO] Ajouté au groupe $SUDO_GRP.${NC}"
+            echo -e "  ${BLUE}[INFO] $(printf "$RMSG_SETUP_STEP2_GROUP_ADDED" "$SUDO_GRP")${NC}"
         fi
         if [ ! -f "/etc/sudoers.d/$USERNAME" ]; then
             echo "$USERNAME ALL=(ALL) NOPASSWD:ALL" > "/etc/sudoers.d/$USERNAME"
             chmod 440 "/etc/sudoers.d/$USERNAME"
-            echo -e "  ${BLUE}[INFO] Configuration sudoers ajoutée.${NC}"
+            echo -e "  ${BLUE}[INFO] $RMSG_SETUP_STEP2_SUDOERS_ADDED${NC}"
         fi
-        done_step "Utilisateur $USERNAME prêt (existait déjà, droits vérifiés)."
+        done_step "$(printf "$RMSG_SETUP_STEP2_DONE_EXISTING" "$USERNAME")"
     fi
     mark_done "step2"
 fi
 
 # === 3/9 ===
 if is_done "step3"; then
-    skip_step "Étape 3/9 : Copie clé SSH vers $USERNAME"
-elif confirm_step "Étape 3/9 : Copie clé SSH vers $USERNAME" "Copie votre clé SSH pour que $USERNAME puisse se connecter."; then
+    skip_step "$(printf "$RMSG_SETUP_STEP3_TITLE" "$USERNAME")"
+elif confirm_step "$(printf "$RMSG_SETUP_STEP3_TITLE" "$USERNAME")" "$(printf "$RMSG_SETUP_STEP3_DESC" "$USERNAME")"; then
     mkdir -p "/home/$USERNAME/.ssh"
     if [ -f /root/.ssh/authorized_keys ]; then
         cp /root/.ssh/authorized_keys "/home/$USERNAME/.ssh/"
@@ -679,13 +687,13 @@ elif confirm_step "Étape 3/9 : Copie clé SSH vers $USERNAME" "Copie votre clé
     chmod 700 "/home/$USERNAME/.ssh"
     chmod 600 "/home/$USERNAME/.ssh/authorized_keys"
     mark_done "step3"
-    done_step "Clé SSH copiée vers $USERNAME."
+    done_step "$(printf "$RMSG_SETUP_STEP3_DONE" "$USERNAME")"
 fi
 
 # === 4/9 ===
 if is_done "step4"; then
-    skip_step "Étape 4/9 : Durcissement SSH"
-elif confirm_step "Étape 4/9 : Durcissement SSH" "Désactive l'accès root et l'authentification par mot de passe. Après ça, seule votre clé SSH permet de se connecter."; then
+    skip_step "$RMSG_SETUP_STEP4_TITLE"
+elif confirm_step "$RMSG_SETUP_STEP4_TITLE" "$RMSG_SETUP_STEP4_DESC"; then
     cp /etc/ssh/sshd_config /etc/ssh/sshd_config.bak
     sed -i 's/^#*PermitRootLogin.*/PermitRootLogin no/' /etc/ssh/sshd_config
     sed -i 's/^#*PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config
@@ -693,28 +701,28 @@ elif confirm_step "Étape 4/9 : Durcissement SSH" "Désactive l'accès root et l
     if sshd -t 2>/dev/null; then
         restart_ssh
         mark_done "step4"
-        done_step "SSH durci : root désactivé, mot de passe désactivé."
+        done_step "$RMSG_SETUP_STEP4_DONE"
     else
-        echo -e "${RED}[ERR] Configuration SSH invalide. Restauration...${NC}"
+        echo -e "${RED}[ERR] $RMSG_SETUP_STEP4_INVALID_CONFIG_ERR${NC}"
         cp /etc/ssh/sshd_config.bak /etc/ssh/sshd_config
         restart_ssh
-        echo -e "${YELLOW}[WARN] Configuration SSH restaurée. Le durcissement n'a pas été appliqué.${NC}"
+        echo -e "${YELLOW}[WARN] $RMSG_SETUP_STEP4_RESTORED_WARN${NC}"
     fi
 fi
 
 # === 5/9 ===
 if is_done "step5"; then
-    skip_step "Étape 5/9 : Firewall"
-elif confirm_step "Étape 5/9 : Firewall" "Bloque tout sauf SSH (22), HTTP (80), HTTPS (443). Vos bases de données et apps restent invisibles de l'extérieur."; then
+    skip_step "$RMSG_SETUP_STEP5_TITLE"
+elif confirm_step "$RMSG_SETUP_STEP5_TITLE" "$RMSG_SETUP_STEP5_DESC"; then
     setup_firewall
     mark_done "step5"
-    done_step "Firewall activé : ports 22, 80, 443."
+    done_step "$RMSG_SETUP_STEP5_DONE"
 fi
 
 # === Fail2ban ===
 if is_done "step_fail2ban"; then
-    skip_step "Fail2ban (protection anti-brute-force)"
-elif confirm_step "Fail2ban (protection anti-brute-force)" "Bloque automatiquement les IP qui tentent trop de connexions SSH echouees (5 tentatives max, ban 1h)."; then
+    skip_step "$RMSG_SETUP_FAIL2BAN_TITLE"
+elif confirm_step "$RMSG_SETUP_FAIL2BAN_TITLE" "$RMSG_SETUP_FAIL2BAN_DESC"; then
     if [ "$DISTRO_FAMILY" = "rhel" ]; then
         pkg_install epel-release 2>/dev/null || true
     fi
@@ -734,19 +742,19 @@ F2B_BLOCK
 
     systemctl enable --now fail2ban
     mark_done "step_fail2ban"
-    done_step "Fail2ban active : 5 tentatives max, ban 1h."
+    done_step "$RMSG_SETUP_FAIL2BAN_DONE"
 fi
 
 # === 6/9 ===
 if is_done "step6"; then
-    skip_step "Étape 6/9 : Installation Docker"
-elif confirm_step "Étape 6/9 : Installation Docker" "Installe Docker pour faire tourner vos applications dans des conteneurs isolés."; then
+    skip_step "$RMSG_SETUP_STEP6_TITLE"
+elif confirm_step "$RMSG_SETUP_STEP6_TITLE" "$RMSG_SETUP_STEP6_DESC"; then
     if ! command -v docker &>/dev/null; then
         curl -fsSL https://get.docker.com | sh
         usermod -aG docker "$USERNAME"
-        done_step "Docker installé."
+        done_step "$RMSG_SETUP_STEP6_INSTALLED"
     else
-        done_step "Docker déjà installé."
+        done_step "$RMSG_SETUP_STEP6_ALREADY"
     fi
 
     # Rotation des logs Docker (evite que les logs remplissent le disque)
@@ -762,7 +770,7 @@ elif confirm_step "Étape 6/9 : Installation Docker" "Installe Docker pour faire
 }
 DOCKER_LOG_BLOCK
         systemctl restart docker 2>/dev/null || true
-        done_step "Rotation des logs Docker configuree (10 Mo x 3 fichiers)."
+        done_step "$RMSG_SETUP_STEP6_LOG_ROTATION"
     fi
 
     mark_done "step6"
@@ -770,33 +778,33 @@ fi
 
 # === 7/9 ===
 if is_done "step7"; then
-    skip_step "Étape 7/9 : Installation Caddy"
-elif confirm_step "Étape 7/9 : Installation Caddy (reverse proxy)" "Caddy redirige vos domaines vers vos apps et gère les certificats SSL (HTTPS) automatiquement."; then
+    skip_step "$RMSG_SETUP_STEP7_TITLE"
+elif confirm_step "$RMSG_SETUP_STEP7_TITLE" "$RMSG_SETUP_STEP7_DESC"; then
     if ! command -v caddy &>/dev/null; then
         setup_caddy
-        done_step "Caddy installé."
+        done_step "$RMSG_SETUP_STEP7_INSTALLED"
     else
-        done_step "Caddy déjà installé."
+        done_step "$RMSG_SETUP_STEP7_ALREADY"
     fi
     mark_done "step7"
 fi
 
 # === 8/9 ===
 if is_done "step8"; then
-    skip_step "Étape 8/9 : Mises à jour automatiques"
-elif confirm_step "Étape 8/9 : Mises à jour automatiques" "Le serveur installera les patchs de sécurité tout seul, sans redémarrer."; then
+    skip_step "$RMSG_SETUP_STEP8_TITLE"
+elif confirm_step "$RMSG_SETUP_STEP8_TITLE" "$RMSG_SETUP_STEP8_DESC"; then
     setup_auto_updates
     mark_done "step8"
-    done_step "Mises à jour automatiques activées."
+    done_step "$RMSG_SETUP_STEP8_DONE"
 fi
 
 # === 9/9 ===
 if is_done "step9"; then
-    skip_step "Étape 9/9 : Dashboard de connexion (MOTD)"
-elif confirm_step "Étape 9/9 : Dashboard de connexion (MOTD)" "Affiche l'état du serveur (CPU, RAM, disque, Docker) à chaque connexion SSH."; then
+    skip_step "$RMSG_SETUP_STEP9_TITLE"
+elif confirm_step "$RMSG_SETUP_STEP9_TITLE" "$RMSG_SETUP_STEP9_DESC"; then
     setup_motd
     mark_done "step9"
-    done_step "Dashboard MOTD installé."
+    done_step "$RMSG_SETUP_STEP9_DONE"
 fi
 
 # === Dossier apps ===
@@ -805,24 +813,30 @@ chown -R "$USERNAME:$USERNAME" "/home/$USERNAME/apps"
 
 echo ""
 echo "========================================="
-echo -e "  ${GREEN}SERVEUR SÉCURISÉ !${NC}"
+echo -e "  ${GREEN}${RMSG_SETUP_FINAL_TITLE}${NC}"
 echo "========================================="
 echo ""
-echo "  Distribution : $DISTRO_NAME"
+echo "  $(printf "$RMSG_SETUP_FINAL_DISTRO" "$DISTRO_NAME")"
 echo ""
-echo "  Installé :"
-echo "    [OK] Utilisateur $USERNAME (sudo)"
-echo "    [OK] SSH par clé uniquement"
-echo "    [OK] Root désactivé"
+echo "  $RMSG_SETUP_FINAL_INSTALLED"
+echo "    [OK] $USERNAME (sudo)"
+echo "    [OK] SSH key only"
+echo "    [OK] Root disabled"
 echo "    [OK] Firewall (22, 80, 443)"
 echo "    [OK] Fail2ban (anti-brute-force)"
-echo "    [OK] Docker + rotation des logs"
+echo "    [OK] Docker + log rotation"
 echo "    [OK] Caddy (reverse proxy + SSL)"
 echo "    [OK] Git"
-echo "    [OK] Mises à jour automatiques"
-echo "    [OK] Dashboard MOTD (état serveur à la connexion)"
+echo "    [OK] Auto updates"
+echo "    [OK] MOTD dashboard"
 echo "========================================="
 REMOTE_EOF
+
+# =========================================
+# INJECTION DES MESSAGES DE LANGUE
+# =========================================
+
+inject_lang_into_remote "$TMPSCRIPT"
 
 # Remplacer le placeholder USERNAME (compatible macOS et Linux)
 SAFE_USERNAME=$(sed_escape "$USERNAME")
@@ -834,7 +848,7 @@ fi
 
 # Envoyer le script sur le serveur et l'exécuter
 if ! scp -i "$SSH_KEY" "$TMPSCRIPT" "${SSH_USER}@${VPS_IP}:/tmp/vps-bootstrap-remote.sh"; then
-    err "Impossible d'envoyer le script sur le serveur. Vérifiez la connexion."
+    err "$MSG_SETUP_SCP_ERR"
     rm -f "$TMPSCRIPT"
     exit 1
 fi
@@ -851,26 +865,26 @@ fi
 # =========================================
 
 echo ""
-echo -e "${BOLD}=== PARTIE 3 : C'EST TERMINÉ ! ===${NC}"
+echo -e "${BOLD}${MSG_SETUP_POSTSETUP_TITLE}${NC}"
 echo ""
-echo "  Pour vous connecter au serveur :"
+echo "  $MSG_SETUP_POSTSETUP_CONNECT_HINT"
 echo ""
 echo -e "    ${GREEN}ssh ${USERNAME}@${VPS_IP}${NC}"
 echo ""
 
 if [[ "$SSH_KEY" != "$SSH_DIR/id_ed25519" ]]; then
-    echo "  (avec votre clé spécifique) :"
+    echo "  $MSG_SETUP_POSTSETUP_SPECIFIC_KEY"
     echo ""
     echo -e "    ${GREEN}ssh -i ${SSH_KEY} ${USERNAME}@${VPS_IP}${NC}"
     echo ""
 fi
 
-echo "  Voulez-vous simplifier la connexion ?"
-echo "  On peut ajouter un raccourci pour taper juste : ssh vps"
+echo "  $MSG_SETUP_POSTSETUP_SHORTCUT_OFFER"
+echo "  $MSG_SETUP_POSTSETUP_SHORTCUT_EXPLAIN"
 echo ""
-read -p "  Créer le raccourci ? (o/N) : " CREATE_CONFIG
-if [[ "$CREATE_CONFIG" == "o" || "$CREATE_CONFIG" == "O" ]]; then
-    read -p "  Nom du raccourci (défaut: vps) : " SSH_ALIAS
+read -p "  $MSG_SETUP_POSTSETUP_SHORTCUT_PROMPT" CREATE_CONFIG
+if [[ "$CREATE_CONFIG" == "o" || "$CREATE_CONFIG" == "O" || "$CREATE_CONFIG" == "y" || "$CREATE_CONFIG" == "Y" ]]; then
+    read -p "  $MSG_SETUP_POSTSETUP_ALIAS_PROMPT" SSH_ALIAS
     SSH_ALIAS=${SSH_ALIAS:-vps}
 
     {
@@ -882,16 +896,16 @@ if [[ "$CREATE_CONFIG" == "o" || "$CREATE_CONFIG" == "O" ]]; then
     } >> "$SSH_DIR/config"
     chmod 600 "$SSH_DIR/config"
 
-    success "Raccourci créé ! Connectez-vous avec :"
+    success "$MSG_SETUP_POSTSETUP_SHORTCUT_OK"
     echo ""
     echo -e "    ${GREEN}ssh ${SSH_ALIAS}${NC}"
 else
-    info "Pas de raccourci créé."
+    info "$MSG_SETUP_POSTSETUP_SHORTCUT_SKIP"
 fi
 
 echo ""
-echo "  Vos apps se déploient dans : ~/apps/"
+echo "  $MSG_SETUP_POSTSETUP_APPS_DIR"
 echo ""
 echo "========================================="
-echo -e "  ${GREEN}SETUP COMPLET !${NC}"
+echo -e "  ${GREEN}${MSG_SETUP_POSTSETUP_DONE_TITLE}${NC}"
 echo "========================================="

@@ -55,6 +55,12 @@ detect_os() {
 
 detect_os
 
+# --- Chargement de la langue ---
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)"
+if [ -f "${SCRIPT_DIR}/lang.sh" ]; then
+    . "${SCRIPT_DIR}/lang.sh"
+fi
+
 # =========================================
 # ARGUMENTS (MODE CI/CD)
 # =========================================
@@ -86,8 +92,8 @@ while [ $# -gt 0 ]; do
         -tag)    DEPLOY_TAG="$2"; shift 2 ;;
         --rollback) ROLLBACK=true; shift ;;
         *)
-            err "Argument inconnu : $1"
-            echo "  Usage : bash deploy.sh -ip IP -key CLÉ -user USER -app NOM -repo URL -domain DOMAINE [-port PORT] [-env FICHIER] [-branch BRANCHE] [-tag TAG] [--rollback]"
+            err "$(printf "$MSG_DEPLOY_UNKNOWN_ARG" "$1")"
+            echo "$MSG_DEPLOY_USAGE_CICD"
             exit 1
             ;;
     esac
@@ -95,7 +101,7 @@ done
 
 # Si les deux sont fournis, le tag a priorite
 if [ -n "$DEPLOY_TAG" ] && [ -n "$DEPLOY_BRANCH" ]; then
-    warn "Les options -branch et -tag sont mutuellement exclusives. Le tag sera utilise."
+    warn "$MSG_DEPLOY_BRANCH_TAG_EXCLUSIVE"
     DEPLOY_BRANCH=""
 fi
 
@@ -108,25 +114,25 @@ if [ "$INTERACTIVE" = true ]; then
     echo ""
     echo "========================================="
     echo -e "  ${BOLD}VPS DEPLOY${NC}"
-    echo "  Déploie une application sur votre VPS"
+    echo "  $MSG_DEPLOY_TITLE"
     echo "========================================="
     echo ""
-    echo "  Ce script va :"
-    echo "    1. Se connecter à votre VPS"
-    echo "    2. Configurer l'accès à votre dépôt GitHub (si besoin)"
-    echo "    3. Télécharger votre application"
-    echo "    4. La lancer avec Docker"
-    echo "    5. La rendre accessible sur votre domaine (HTTPS automatique)"
+    echo "$MSG_DEPLOY_INTRO_LINE1"
+    echo "$MSG_DEPLOY_INTRO_STEP1"
+    echo "$MSG_DEPLOY_INTRO_STEP2"
+    echo "$MSG_DEPLOY_INTRO_STEP3"
+    echo "$MSG_DEPLOY_INTRO_STEP4"
+    echo "$MSG_DEPLOY_INTRO_STEP5"
     echo ""
-    echo "  On y va étape par étape."
+    echo "$MSG_DEPLOY_INTRO_READY"
     echo ""
 
     # =========================================
     # ÉTAPE 1 : CONNEXION AU VPS
     # =========================================
 
-    echo -e "${BOLD}${YELLOW}[>] Étape 1 : Connexion au VPS${NC}"
-    echo "  On a besoin des informations de votre serveur."
+    echo -e "${BOLD}${YELLOW}$MSG_DEPLOY_STEP1_TITLE${NC}"
+    echo "$MSG_DEPLOY_STEP1_INTRO"
     echo ""
 
     SSH_DIR="$HOME/.ssh"
@@ -136,41 +142,41 @@ if [ "$INTERACTIVE" = true ]; then
         VPS_IP=$(read_state_var "$LOCAL_STATE" "VPS_IP")
         SSH_KEY=$(read_state_var "$LOCAL_STATE" "SSH_KEY")
         USERNAME=$(read_state_var "$LOCAL_STATE" "USERNAME")
-        success "Session vps-bootstrap détectée :"
+        success "$MSG_DEPLOY_SESSION_FOUND"
         echo ""
-        echo "    Serveur  : $VPS_IP"
-        echo "    Clé SSH  : $(basename "$SSH_KEY")"
-        echo "    User     : $USERNAME"
+        echo "    $(printf "$MSG_DEPLOY_SESSION_IP" "$VPS_IP")"
+        echo "    $(printf "$MSG_DEPLOY_SESSION_KEY" "$(basename "$SSH_KEY")")"
+        echo "    $(printf "$MSG_DEPLOY_SESSION_USER" "$USERNAME")"
         echo ""
-        read -p "  C'est bien votre serveur ? (o/N) : " USE_SESSION
-        if [[ "$USE_SESSION" != "o" && "$USE_SESSION" != "O" ]]; then
+        read -p "$MSG_DEPLOY_SESSION_CONFIRM_PROMPT" USE_SESSION
+        if [[ ! "$USE_SESSION" =~ ^[oOyY]$ ]]; then
             VPS_IP=""
             SSH_KEY=""
             USERNAME=""
         fi
     else
-        info "Aucune session vps-bootstrap trouvée."
-        echo "  Si vous avez utilisé setup.sh avant, les infos sont normalement sauvegardées."
-        echo "  Sinon, pas de souci, on va les demander."
+        info "$MSG_DEPLOY_SESSION_NOT_FOUND"
+        echo "$MSG_DEPLOY_SESSION_NOT_FOUND_HINT1"
+        echo "$MSG_DEPLOY_SESSION_NOT_FOUND_HINT2"
         echo ""
     fi
 
     if [ -z "$VPS_IP" ]; then
-        echo "  L'adresse IP de votre VPS se trouve dans le tableau de bord"
-        echo "  de votre hébergeur (OVH, Hetzner, DigitalOcean, etc.)."
+        echo "$MSG_DEPLOY_IP_HINT1"
+        echo "$MSG_DEPLOY_IP_HINT2"
         echo ""
-        read -p "  Adresse IP du VPS : " VPS_IP
+        read -p "$MSG_DEPLOY_IP_PROMPT" VPS_IP
     fi
     if [ -z "$SSH_KEY" ]; then
         echo ""
-        echo "  La clé SSH est le fichier qui vous permet de vous connecter"
-        echo "  au serveur sans mot de passe. Elle se trouve dans ~/.ssh/"
+        echo "$MSG_DEPLOY_KEY_HINT1"
+        echo "$MSG_DEPLOY_KEY_HINT2"
         echo ""
-        read -p "  Chemin de la clé SSH (ex: ~/.ssh/id_ed25519) : " SSH_KEY
+        read -p "$MSG_DEPLOY_KEY_PROMPT" SSH_KEY
     fi
     if [ -z "$USERNAME" ]; then
         echo ""
-        read -p "  Nom d'utilisateur sur le VPS (défaut: deploy) : " USERNAME
+        read -p "$MSG_DEPLOY_USERNAME_PROMPT" USERNAME
         USERNAME=${USERNAME:-deploy}
     fi
 
@@ -182,7 +188,7 @@ if [ "$INTERACTIVE" = true ]; then
 
     DEPLOY_HISTORY=$(ssh -i "$SSH_KEY" -o ConnectTimeout=5 -o BatchMode=yes "${USERNAME}@${VPS_IP}" "tail -n 5 ~/.deploy-history 2>/dev/null" 2>/dev/null || true)
     if [ -n "$DEPLOY_HISTORY" ]; then
-        info "Derniers deploiements :"
+        info "$MSG_DEPLOY_LAST_DEPLOYS"
         echo ""
         while IFS= read -r line; do
             echo "    $line"
@@ -194,28 +200,28 @@ if [ "$INTERACTIVE" = true ]; then
     # CHOIX : DEPLOYER OU REVENIR EN ARRIERE
     # =========================================
 
-    echo -e "${BOLD}${YELLOW}[>] Que souhaitez-vous faire ?${NC}"
+    echo -e "${BOLD}${YELLOW}$MSG_DEPLOY_ACTION_TITLE${NC}"
     echo ""
-    echo "    1) Déployer une application"
-    echo "    2) Revenir en arrière (rollback)"
+    echo "$MSG_DEPLOY_ACTION_DEPLOY"
+    echo "$MSG_DEPLOY_ACTION_ROLLBACK"
     echo ""
-    read -p "  Votre choix (1/2) : " DEPLOY_CHOICE
+    read -p "$MSG_DEPLOY_ACTION_PROMPT" DEPLOY_CHOICE
     echo ""
 
     if [ "$DEPLOY_CHOICE" = "2" ]; then
         ROLLBACK=true
 
         # Lister les apps existantes sur le serveur
-        info "Récupération des applications déployées..."
+        info "$MSG_DEPLOY_ROLLBACK_FETCHING"
         APPS_LIST=$(ssh -i "$SSH_KEY" -o ConnectTimeout=10 -o BatchMode=yes "${USERNAME}@${VPS_IP}" "ls -1 ~/apps/ 2>/dev/null" || true)
 
         if [ -z "$APPS_LIST" ]; then
-            err "Aucune application déployée sur ce serveur."
+            err "$MSG_DEPLOY_ROLLBACK_NO_APPS"
             exit 1
         fi
 
         echo ""
-        echo "  Applications déployées :"
+        echo "$MSG_DEPLOY_ROLLBACK_APPS_LIST"
         echo ""
         INDEX=1
         while IFS= read -r app; do
@@ -223,34 +229,34 @@ if [ "$INTERACTIVE" = true ]; then
             INDEX=$((INDEX + 1))
         done <<< "$APPS_LIST"
         echo ""
-        read -p "  Quelle application restaurer ? : " APP_CHOICE
+        read -p "$MSG_DEPLOY_ROLLBACK_SELECT_PROMPT" APP_CHOICE
 
         if ! [[ "$APP_CHOICE" =~ ^[0-9]+$ ]]; then
-            err "Choix invalide : entrez un numero."
+            err "$MSG_DEPLOY_ROLLBACK_INVALID_CHOICE"
             exit 1
         fi
 
         APP_NAME=$(echo "$APPS_LIST" | sed -n "${APP_CHOICE}p")
         if [ -z "$APP_NAME" ]; then
-            err "Choix invalide."
+            err "$MSG_DEPLOY_ROLLBACK_INVALID_CHOICE_EMPTY"
             exit 1
         fi
 
-        success "Application sélectionnée : $APP_NAME"
+        success "$(printf "$MSG_DEPLOY_ROLLBACK_APP_SELECTED" "$APP_NAME")"
 
         # Vérifier qu'un commit précédent existe
         HAS_PREVIOUS=$(ssh -i "$SSH_KEY" -o ConnectTimeout=10 -o BatchMode=yes "${USERNAME}@${VPS_IP}" "cat ~/apps/${APP_NAME}/.last-working-commit 2>/dev/null" || true)
         if [ -z "$HAS_PREVIOUS" ]; then
-            err "Aucun commit précédent trouvé pour $APP_NAME."
-            echo "  Le rollback n'est possible qu'après au moins une mise à jour."
+            err "$(printf "$MSG_DEPLOY_ROLLBACK_NO_PREVIOUS" "$APP_NAME")"
+            echo "$MSG_DEPLOY_ROLLBACK_NEED_UPDATE"
             exit 1
         fi
 
         echo ""
-        info "Commit précédent : $HAS_PREVIOUS"
-        read -p "  Confirmer le rollback ? (o/N) : " CONFIRM_ROLLBACK
-        if [[ "$CONFIRM_ROLLBACK" != "o" && "$CONFIRM_ROLLBACK" != "O" ]]; then
-            info "Rollback annulé."
+        info "$(printf "$MSG_DEPLOY_ROLLBACK_PREVIOUS_COMMIT" "$HAS_PREVIOUS")"
+        read -p "$MSG_DEPLOY_ROLLBACK_CONFIRM_PROMPT" CONFIRM_ROLLBACK
+        if [[ ! "$CONFIRM_ROLLBACK" =~ ^[oOyY]$ ]]; then
+            info "$MSG_DEPLOY_ROLLBACK_CANCELLED"
             exit 0
         fi
     fi
@@ -267,15 +273,15 @@ if [ "$INTERACTIVE" = true ]; then
     # ÉTAPE 2 : CHOIX DE L'APPLICATION
     # =========================================
 
-    echo -e "${BOLD}${YELLOW}[>] Étape 2 : Votre application${NC}"
-    echo "  On a besoin de l'adresse de votre dépôt Git."
+    echo -e "${BOLD}${YELLOW}$MSG_DEPLOY_STEP2_TITLE${NC}"
+    echo "$MSG_DEPLOY_STEP2_INTRO"
     echo ""
-    echo "  Où trouver l'URL ?"
-    echo "    - Allez sur votre dépôt GitHub"
-    echo "    - Cliquez le bouton vert 'Code'"
-    echo "    - Copiez l'URL (HTTPS ou SSH, les deux fonctionnent)"
+    echo "$MSG_DEPLOY_REPO_FIND_HINT1"
+    echo "$MSG_DEPLOY_REPO_FIND_HINT2"
+    echo "$MSG_DEPLOY_REPO_FIND_HINT3"
+    echo "$MSG_DEPLOY_REPO_FIND_HINT4"
     echo ""
-    read -p "  URL du dépôt Git : " REPO_URL
+    read -p "$MSG_DEPLOY_REPO_URL_PROMPT" REPO_URL
 
     # Suggestion du nom depuis le repo
     SUGGESTED_NAME=""
@@ -284,14 +290,14 @@ if [ "$INTERACTIVE" = true ]; then
     fi
 
     echo ""
-    echo "  Le nom de l'application sert à identifier votre projet sur le serveur."
-    echo "  Il sera utilisé comme nom de dossier dans ~/apps/"
+    echo "$MSG_DEPLOY_APP_NAME_HINT1"
+    echo "$MSG_DEPLOY_APP_NAME_HINT2"
     echo ""
     if [ -n "$SUGGESTED_NAME" ]; then
-        read -p "  Nom de l'application (défaut: $SUGGESTED_NAME) : " APP_NAME_INPUT
+        read -p "$(printf "$MSG_DEPLOY_APP_NAME_PROMPT_DEFAULT" "$SUGGESTED_NAME")" APP_NAME_INPUT
         APP_NAME=${APP_NAME_INPUT:-$SUGGESTED_NAME}
     else
-        read -p "  Nom de l'application : " APP_NAME
+        read -p "$MSG_DEPLOY_APP_NAME_PROMPT" APP_NAME
     fi
 
     # =========================================
@@ -299,20 +305,20 @@ if [ "$INTERACTIVE" = true ]; then
     # =========================================
 
     echo ""
-    echo "  Par defaut, la branche principale (main/master) sera deployee."
-    echo "  Vous pouvez aussi choisir une branche ou un tag specifique."
+    echo "$MSG_DEPLOY_BRANCH_TAG_HINT1"
+    echo "$MSG_DEPLOY_BRANCH_TAG_HINT2"
     echo ""
-    echo "    1) Branche par defaut (main/master)"
-    echo "    2) Choisir une branche"
-    echo "    3) Choisir un tag"
+    echo "$MSG_DEPLOY_BRANCH_TAG_OPT1"
+    echo "$MSG_DEPLOY_BRANCH_TAG_OPT2"
+    echo "$MSG_DEPLOY_BRANCH_TAG_OPT3"
     echo ""
-    read -p "  Votre choix (1/2/3) : " BRANCH_CHOICE
+    read -p "$MSG_DEPLOY_BRANCH_TAG_CHOICE_PROMPT" BRANCH_CHOICE
     case "$BRANCH_CHOICE" in
         2)
-            read -p "  Nom de la branche : " DEPLOY_BRANCH
+            read -p "$MSG_DEPLOY_BRANCH_NAME_PROMPT" DEPLOY_BRANCH
             ;;
         3)
-            read -p "  Nom du tag : " DEPLOY_TAG
+            read -p "$MSG_DEPLOY_TAG_NAME_PROMPT" DEPLOY_TAG
             ;;
         *)
             :
@@ -324,22 +330,22 @@ if [ "$INTERACTIVE" = true ]; then
     # =========================================
 
     echo ""
-    echo -e "${BOLD}${YELLOW}[>] Étape 3 : Domaine et configuration${NC}"
-    echo "  Pour que votre application soit accessible sur internet,"
-    echo "  vous avez besoin d'un nom de domaine qui pointe vers votre VPS."
+    echo -e "${BOLD}${YELLOW}$MSG_DEPLOY_STEP3_TITLE${NC}"
+    echo "$MSG_DEPLOY_STEP3_INTRO1"
+    echo "$MSG_DEPLOY_STEP3_INTRO2"
     echo ""
-    echo "  Assurez-vous que le DNS de votre domaine pointe vers $VPS_IP"
-    echo "  (enregistrement A chez votre registrar : OVH, Namecheap, etc.)"
+    echo "$(printf "$MSG_DEPLOY_STEP3_DNS_HINT" "$VPS_IP")"
+    echo "$MSG_DEPLOY_STEP3_DNS_REGISTRAR"
     echo ""
-    read -p "  Nom de domaine (ex: monapp.example.com) : " DOMAIN
+    read -p "$MSG_DEPLOY_DOMAIN_PROMPT" DOMAIN
     # Nettoyer le domaine (retirer https://, http://, slash final)
     DOMAIN=$(echo "$DOMAIN" | sed 's|^https://||;s|^http://||;s|/$||')
 
     echo ""
-    echo "  Le port est le numéro sur lequel votre application écoute."
-    echo "  Si vous ne savez pas, laissez la valeur par défaut."
+    echo "$MSG_DEPLOY_PORT_HINT1"
+    echo "$MSG_DEPLOY_PORT_HINT2"
     echo ""
-    read -p "  Port de l'application (défaut: 3000) : " APP_PORT_INPUT
+    read -p "$MSG_DEPLOY_PORT_PROMPT" APP_PORT_INPUT
     APP_PORT=${APP_PORT_INPUT:-3000}
 
     # =========================================
@@ -347,18 +353,18 @@ if [ "$INTERACTIVE" = true ]; then
     # =========================================
 
     echo ""
-    echo -e "${BOLD}${YELLOW}[>] Étape 4 : Variables d'environnement${NC}"
-    echo "  Certaines applications ont besoin d'un fichier .env"
-    echo "  (clés API, mots de passe de base de données, etc.)"
+    echo -e "${BOLD}${YELLOW}$MSG_DEPLOY_STEP4_TITLE${NC}"
+    echo "$MSG_DEPLOY_STEP4_INTRO1"
+    echo "$MSG_DEPLOY_STEP4_INTRO2"
     echo ""
-    read -p "  Votre application a-t-elle un fichier .env ? (o/N) : " NEED_ENV
+    read -p "$MSG_DEPLOY_ENV_NEED_PROMPT" NEED_ENV
     CREATE_EMPTY_ENV="false"
-    if [[ "$NEED_ENV" == "o" || "$NEED_ENV" == "O" ]]; then
+    if [[ "$NEED_ENV" =~ ^[oOyY]$ ]]; then
         echo ""
-        echo "  Indiquez le chemin du fichier .env sur votre machine."
-        echo "  Vous pouvez aussi glisser-déposer le fichier dans le terminal."
+        echo "$MSG_DEPLOY_ENV_PATH_HINT1"
+        echo "$MSG_DEPLOY_ENV_PATH_HINT2"
         echo ""
-        read -p "  Chemin du fichier .env : " ENV_FILE
+        read -p "$MSG_DEPLOY_ENV_PATH_PROMPT" ENV_FILE
 
         # Nettoyage du chemin (espaces, guillemets, ~, antislash macOS drag-and-drop, slash final)
         ENV_FILE=$(echo "$ENV_FILE" | sed "s|^['\"]||;s|['\"]$||;s|^~|$HOME|;s|\\\\ | |g;s|[[:space:]]*$||;s|/$||")
@@ -367,29 +373,29 @@ if [ "$INTERACTIVE" = true ]; then
         if [ -d "$ENV_FILE" ]; then
             if [ -f "$ENV_FILE/.env" ]; then
                 ENV_FILE="$ENV_FILE/.env"
-                success "Fichier trouvé : $ENV_FILE"
+                success "$(printf "$MSG_DEPLOY_ENV_FOUND" "$ENV_FILE")"
             fi
         fi
 
         # Si toujours introuvable, proposer des alternatives
         while [ -n "$ENV_FILE" ] && [ ! -f "$ENV_FILE" ]; do
             echo ""
-            warn "Fichier introuvable : $ENV_FILE"
+            warn "$(printf "$MSG_DEPLOY_ENV_NOT_FOUND" "$ENV_FILE")"
             echo ""
-            echo "  Que souhaitez-vous faire ?"
-            echo "    1) Entrer un autre chemin"
-            echo "    2) Continuer sans fichier .env (vous le remplirez sur le serveur)"
+            echo "$MSG_DEPLOY_ENV_RETRY_TITLE"
+            echo "$MSG_DEPLOY_ENV_RETRY_OPT1"
+            echo "$MSG_DEPLOY_ENV_RETRY_OPT2"
             echo ""
-            read -p "  Votre choix (1/2) : " ENV_CHOICE
+            read -p "$MSG_DEPLOY_ENV_RETRY_CHOICE_PROMPT" ENV_CHOICE
             case "$ENV_CHOICE" in
                 1)
                     echo ""
-                    read -p "  Nouveau chemin du fichier .env : " ENV_FILE
+                    read -p "$MSG_DEPLOY_ENV_NEW_PATH_PROMPT" ENV_FILE
                     ENV_FILE=$(echo "$ENV_FILE" | sed "s|^['\"]||;s|['\"]$||;s|^~|$HOME|;s|\\\\ | |g;s|[[:space:]]*$||;s|/$||")
                     if [ -d "$ENV_FILE" ]; then
                         if [ -f "$ENV_FILE/.env" ]; then
                             ENV_FILE="$ENV_FILE/.env"
-                            success "Fichier trouvé : $ENV_FILE"
+                            success "$(printf "$MSG_DEPLOY_ENV_FOUND" "$ENV_FILE")"
                         fi
                     fi
                     ;;
@@ -397,8 +403,8 @@ if [ "$INTERACTIVE" = true ]; then
                     ENV_FILE=""
                     CREATE_EMPTY_ENV="true"
                     echo ""
-                    info "Un fichier .env vide sera créé sur le serveur."
-                    echo "  Après le déploiement, connectez-vous et remplissez-le :"
+                    info "$MSG_DEPLOY_ENV_EMPTY_CREATED"
+                    echo "$MSG_DEPLOY_ENV_EMPTY_HOW_TO_FILL"
                     echo ""
                     echo "    ssh -i ~/.ssh/$(basename "$SSH_KEY") ${USERNAME}@${VPS_IP}"
                     echo "    nano ~/apps/${APP_NAME}/.env"
@@ -408,7 +414,7 @@ if [ "$INTERACTIVE" = true ]; then
         done
 
         if [ -f "$ENV_FILE" ] 2>/dev/null; then
-            success "Fichier .env trouvé : $ENV_FILE"
+            success "$(printf "$MSG_DEPLOY_ENV_FOUND" "$ENV_FILE")"
         fi
     fi
 
@@ -418,28 +424,28 @@ if [ "$INTERACTIVE" = true ]; then
 
     echo ""
     echo "========================================="
-    echo -e "  ${BOLD}Récapitulatif${NC}"
+    echo -e "  ${BOLD}$MSG_DEPLOY_RECAP_TITLE${NC}"
     echo "========================================="
     echo ""
-    echo "    Serveur     : $VPS_IP ($USERNAME)"
-    echo "    Application : $APP_NAME"
-    echo "    Dépôt Git   : $REPO_URL"
-    echo "    Domaine     : $DOMAIN"
-    echo "    Port        : $APP_PORT"
+    echo "    $(printf "$MSG_DEPLOY_RECAP_SERVER" "$VPS_IP" "$USERNAME")"
+    echo "    $(printf "$MSG_DEPLOY_RECAP_APP" "$APP_NAME")"
+    echo "    $(printf "$MSG_DEPLOY_RECAP_REPO" "$REPO_URL")"
+    echo "    $(printf "$MSG_DEPLOY_RECAP_DOMAIN" "$DOMAIN")"
+    echo "    $(printf "$MSG_DEPLOY_RECAP_PORT" "$APP_PORT")"
     if [ -n "$DEPLOY_TAG" ]; then
-        echo "    Tag         : $DEPLOY_TAG"
+        echo "    $(printf "$MSG_DEPLOY_RECAP_TAG" "$DEPLOY_TAG")"
     elif [ -n "$DEPLOY_BRANCH" ]; then
-        echo "    Branche     : $DEPLOY_BRANCH"
+        echo "    $(printf "$MSG_DEPLOY_RECAP_BRANCH" "$DEPLOY_BRANCH")"
     fi
     if [ -n "$ENV_FILE" ]; then
-        echo "    Fichier .env: $ENV_FILE"
+        echo "    $(printf "$MSG_DEPLOY_RECAP_ENV" "$ENV_FILE")"
     elif [ "$CREATE_EMPTY_ENV" = "true" ]; then
-        echo "    Fichier .env: (vide, à remplir sur le serveur)"
+        echo "    $MSG_DEPLOY_RECAP_ENV_EMPTY"
     fi
     echo ""
-    read -p "  Lancer le déploiement ? (o/N) : " CONFIRM_DEPLOY
-    if [[ "$CONFIRM_DEPLOY" != "o" && "$CONFIRM_DEPLOY" != "O" ]]; then
-        info "Déploiement annulé."
+    read -p "$MSG_DEPLOY_CONFIRM_LAUNCH_PROMPT" CONFIRM_DEPLOY
+    if [[ ! "$CONFIRM_DEPLOY" =~ ^[oOyY]$ ]]; then
+        info "$MSG_DEPLOY_CANCELLED"
         exit 0
     fi
 
@@ -453,39 +459,39 @@ fi
 ERRORS=0
 
 if [ -z "$VPS_IP" ]; then
-    err "Adresse IP requise."
+    err "$MSG_DEPLOY_ERR_NO_IP"
     ERRORS=$((ERRORS + 1))
 fi
 if [ -z "$SSH_KEY" ] || [ ! -f "$SSH_KEY" ]; then
-    err "Clé SSH introuvable : ${SSH_KEY:-non spécifiée}"
+    err "$(printf "$MSG_DEPLOY_ERR_NO_KEY" "${SSH_KEY:-$MSG_DEPLOY_FALLBACK_UNSPECIFIED}")"
     ERRORS=$((ERRORS + 1))
 fi
 if [ -z "$USERNAME" ]; then
-    err "Nom d'utilisateur requis."
+    err "$MSG_DEPLOY_ERR_NO_USER"
     ERRORS=$((ERRORS + 1))
 fi
 if [ -z "$APP_NAME" ]; then
-    err "Nom de l'application requis."
+    err "$MSG_DEPLOY_ERR_NO_APP"
     ERRORS=$((ERRORS + 1))
 fi
 
 if [ "$ROLLBACK" = false ]; then
     if [ -z "$REPO_URL" ]; then
-        err "URL du dépôt Git requise."
+        err "$MSG_DEPLOY_ERR_NO_REPO"
         ERRORS=$((ERRORS + 1))
     fi
     if [ -z "$DOMAIN" ]; then
-        err "Nom de domaine requis."
+        err "$MSG_DEPLOY_ERR_NO_DOMAIN"
         ERRORS=$((ERRORS + 1))
     fi
     if ! [[ "$APP_PORT" =~ ^[0-9]+$ ]]; then
-        err "Port invalide : $APP_PORT"
+        err "$(printf "$MSG_DEPLOY_ERR_INVALID_PORT" "$APP_PORT")"
         ERRORS=$((ERRORS + 1))
     fi
     if [ -n "$ENV_FILE" ] && [ ! -f "$ENV_FILE" ]; then
         # En mode CI/CD, bloquer. En mode interactif, déjà géré.
         if [ "$INTERACTIVE" = false ]; then
-            err "Fichier .env introuvable : $ENV_FILE"
+            err "$(printf "$MSG_DEPLOY_ERR_ENV_NOT_FOUND" "$ENV_FILE")"
             ERRORS=$((ERRORS + 1))
         fi
     fi
@@ -503,33 +509,33 @@ fi
 # --- Nettoyage du nom d'application ---
 CLEAN_APP_NAME=$(echo "$APP_NAME" | tr -cd 'a-zA-Z0-9-')
 if [ "$CLEAN_APP_NAME" != "$APP_NAME" ]; then
-    warn "Nom d'application nettoyé : $CLEAN_APP_NAME"
+    warn "$(printf "$MSG_DEPLOY_WARN_APP_NAME_CLEANED" "$CLEAN_APP_NAME")"
     APP_NAME="$CLEAN_APP_NAME"
 fi
 
 # --- Validation IP ---
 if ! echo "$VPS_IP" | grep -qE '^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$'; then
-    err "Adresse IP invalide : $VPS_IP"
-    echo "  L'adresse doit être au format : 123.45.67.89"
+    err "$(printf "$MSG_DEPLOY_ERR_INVALID_IP" "$VPS_IP")"
+    echo "$MSG_DEPLOY_ERR_INVALID_IP_FORMAT"
     exit 1
 fi
 
 # --- Test connexion SSH ---
-info "Test de connexion au serveur..."
+info "$MSG_DEPLOY_SSH_TESTING"
 if ! ssh -i "$SSH_KEY" -o ConnectTimeout=10 -o BatchMode=yes "${USERNAME}@${VPS_IP}" "echo ok" &>/dev/null; then
-    err "Impossible de se connecter à ${USERNAME}@${VPS_IP}"
+    err "$(printf "$MSG_DEPLOY_SSH_FAILED" "$USERNAME" "$VPS_IP")"
     echo ""
-    echo "  Causes possibles :"
-    echo "    - L'adresse IP est incorrecte"
-    echo "    - Le VPS est éteint ou redémarre"
-    echo "    - Le pare-feu bloque le port 22"
-    echo "    - La clé SSH n'est pas la bonne"
+    echo "$MSG_DEPLOY_SSH_FAILED_CAUSES_TITLE"
+    echo "$MSG_DEPLOY_SSH_FAILED_CAUSE1"
+    echo "$MSG_DEPLOY_SSH_FAILED_CAUSE2"
+    echo "$MSG_DEPLOY_SSH_FAILED_CAUSE3"
+    echo "$MSG_DEPLOY_SSH_FAILED_CAUSE4"
     echo ""
-    echo "  Pour diagnostiquer :"
+    echo "$MSG_DEPLOY_SSH_FAILED_DIAG"
     echo "    ssh -v -i $SSH_KEY ${USERNAME}@${VPS_IP}"
     exit 1
 fi
-success "Connexion SSH vérifiée."
+success "$MSG_DEPLOY_SSH_OK"
 
 # =========================================
 # MODE ROLLBACK
@@ -560,12 +566,12 @@ err()     { echo -e "${RED}[ERR] $1${NC}"; }
 
 echo ""
 echo "========================================="
-echo -e "  ${BOLD}ROLLBACK : $APP_NAME${NC}"
+echo -e "  ${BOLD}$(printf "$RMSG_ROLLBACK_TITLE" "$APP_NAME")${NC}"
 echo "========================================="
 echo ""
 
 if [ ! -d "$APP_DIR" ]; then
-    err "Application introuvable : $APP_DIR"
+    err "$(printf "$RMSG_ROLLBACK_ERR_NOT_FOUND" "$APP_DIR")"
     exit 1
 fi
 
@@ -574,26 +580,26 @@ cd "$APP_DIR"
 LAST_COMMIT_FILE="$APP_DIR/.last-working-commit"
 
 if [ ! -f "$LAST_COMMIT_FILE" ]; then
-    err "Aucun commit precedent trouve."
-    echo "  Le rollback n'est possible qu'apres au moins une mise a jour."
+    err "$RMSG_ROLLBACK_ERR_NO_COMMIT"
+    echo "$RMSG_ROLLBACK_ERR_NO_COMMIT_HINT"
     exit 1
 fi
 
 LAST_COMMIT=$(cat "$LAST_COMMIT_FILE")
-CURRENT_COMMIT=$(git rev-parse HEAD 2>/dev/null || echo "inconnu")
+CURRENT_COMMIT=$(git rev-parse HEAD 2>/dev/null || echo "$RMSG_ROLLBACK_FALLBACK_UNKNOWN")
 
-info "Commit actuel    : $CURRENT_COMMIT"
-info "Rollback vers    : $LAST_COMMIT"
+info "$(printf "$RMSG_ROLLBACK_CURRENT_COMMIT" "$CURRENT_COMMIT")"
+info "$(printf "$RMSG_ROLLBACK_TARGET_COMMIT" "$LAST_COMMIT")"
 echo ""
 
 # Restaurer le commit precedent
-info "Restauration du code..."
+info "$RMSG_ROLLBACK_RESTORING"
 sudo -u "$USERNAME" git checkout "$LAST_COMMIT" 2>/dev/null
-success "Code restaure."
+success "$RMSG_ROLLBACK_CODE_RESTORED"
 
 # Rebuild Docker
 echo ""
-info "Reconstruction et relancement de l'application..."
+info "$RMSG_ROLLBACK_REBUILDING"
 
 COMPOSE_FILE=""
 for f in docker-compose.yml docker-compose.yaml compose.yml compose.yaml; do
@@ -606,7 +612,7 @@ done
 if [ -n "$COMPOSE_FILE" ]; then
     cd "$APP_DIR"
     sudo -u "$USERNAME" docker compose up -d --build 2>&1
-    success "Application relancee avec Docker Compose."
+    success "$RMSG_ROLLBACK_COMPOSE_SUCCESS"
 elif [ -f "$APP_DIR/Dockerfile" ]; then
     sudo -u "$USERNAME" docker build -t "$APP_NAME" "$APP_DIR"
     docker stop "$APP_NAME" 2>/dev/null || true
@@ -624,15 +630,15 @@ elif [ -f "$APP_DIR/Dockerfile" ]; then
         DOCKER_RUN_ARGS="$DOCKER_RUN_ARGS --env-file $APP_DIR/.env"
     fi
     sudo -u "$USERNAME" docker run $DOCKER_RUN_ARGS "$APP_NAME"
-    success "Application relancee."
+    success "$RMSG_ROLLBACK_DOCKER_SUCCESS"
 else
-    warn "Aucun fichier Docker trouve. Code restaure mais application non relancee."
+    warn "$RMSG_ROLLBACK_NO_DOCKER"
 fi
 
 # Historique
 HISTORY_FILE="/home/$USERNAME/.deploy-history"
 DEPLOY_DATE=$(date '+%Y-%m-%d %H:%M:%S')
-ROLLBACK_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "inconnu")
+ROLLBACK_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "$RMSG_ROLLBACK_FALLBACK_UNKNOWN")
 ROLLBACK_DOMAIN=""
 if [ -f "$APP_DIR/.deploy-domain" ]; then
     ROLLBACK_DOMAIN=$(cat "$APP_DIR/.deploy-domain")
@@ -642,17 +648,19 @@ chown "$USERNAME:$USERNAME" "$HISTORY_FILE"
 
 echo ""
 echo "========================================="
-echo -e "  ${GREEN}ROLLBACK TERMINE !${NC}"
+echo -e "  ${GREEN}$RMSG_ROLLBACK_DONE_TITLE${NC}"
 echo "========================================="
 echo ""
-echo "  Application  : $APP_NAME"
-echo "  Commit       : $LAST_COMMIT"
-echo "  Dossier      : $APP_DIR"
+echo "$(printf "$RMSG_ROLLBACK_DONE_APP" "$APP_NAME")"
+echo "$(printf "$RMSG_ROLLBACK_DONE_COMMIT" "$LAST_COMMIT")"
+echo "$(printf "$RMSG_ROLLBACK_DONE_DIR" "$APP_DIR")"
 echo ""
-echo "  Pour revenir a la derniere version :"
+echo "$RMSG_ROLLBACK_DONE_REVERT_HINT"
 echo "    cd $APP_DIR && git checkout main && docker compose up -d --build"
 echo "========================================="
 ROLLBACK_EOF
+
+    inject_lang_into_remote "$TMPSCRIPT"
 
     SAFE_APP=$(sed_escape "$APP_NAME")
     SAFE_USER=$(sed_escape "$USERNAME")
@@ -664,7 +672,7 @@ ROLLBACK_EOF
         sed -i "s|__USERNAME__|$SAFE_USER|g" "$TMPSCRIPT"
     fi
 
-    info "Envoi du script de rollback..."
+    info "$MSG_DEPLOY_ROLLBACK_SENDING"
     scp -i "$SSH_KEY" "$TMPSCRIPT" "${USERNAME}@${VPS_IP}:/tmp/vps-rollback-remote.sh"
     rm -f "$TMPSCRIPT"
 
@@ -677,7 +685,7 @@ ROLLBACK_EOF
     ssh $SSH_TTY_FLAG -i "$SSH_KEY" "${USERNAME}@${VPS_IP}" "chmod 700 /tmp/vps-rollback-remote.sh; sudo bash /tmp/vps-rollback-remote.sh; rm -f /tmp/vps-rollback-remote.sh"
 
     echo ""
-    echo -e "${BOLD}=== ROLLBACK TERMINE ===${NC}"
+    echo -e "${BOLD}$MSG_DEPLOY_ROLLBACK_DONE_TITLE${NC}"
     echo ""
     exit 0
 fi
@@ -716,20 +724,61 @@ success() { echo -e "${GREEN}[OK] $1${NC}"; }
 warn()    { echo -e "${YELLOW}[WARN] $1${NC}"; }
 err()     { echo -e "${RED}[ERR] $1${NC}"; }
 
+skip_step() {
+    echo -e "  ${GREEN}[OK] $1 $RMSG_DEPLOY_SKIP_STEP${NC}"
+}
+
+# --- Progression et reprise ---
+PROGRESS_FILE="$APP_DIR/.deploy-progress"
+CURRENT_STEP="initialisation"
+
+is_done() {
+    [ -f "$PROGRESS_FILE" ] && grep -q "^$1$" "$PROGRESS_FILE" 2>/dev/null
+}
+
+mark_done() {
+    mkdir -p "$(dirname "$PROGRESS_FILE")"
+    echo "$1" >> "$PROGRESS_FILE"
+}
+
+# --- Trap ERR : message clair en cas d'echec ---
+trap_err() {
+    local lineno="$1"
+    echo ""
+    echo -e "${RED}=========================================${NC}"
+    echo -e "${RED}[ERR] $(printf "$RMSG_DEPLOY_ERR_STEP" "$CURRENT_STEP" "$lineno")${NC}"
+    echo -e "${RED}=========================================${NC}"
+    echo ""
+    echo "$RMSG_DEPLOY_ERR_RESUME"
+    echo "$RMSG_DEPLOY_ERR_RESUME_HINT"
+    echo ""
+    echo "$RMSG_DEPLOY_ERR_DOCKER_LOGS_HINT"
+    echo "    cd $APP_DIR && docker compose logs --tail=30 2>/dev/null || docker logs $APP_NAME --tail=30 2>/dev/null"
+    echo ""
+}
+trap 'trap_err $LINENO' ERR
+
 echo ""
 echo "========================================="
-echo -e "  ${BOLD}DÉPLOIEMENT : $APP_NAME${NC}"
+echo -e "  ${BOLD}DEPLOIEMENT : $APP_NAME${NC}"
 echo "========================================="
 echo ""
 
-# --- Vérifications préalables ---
+# Annonce de la reprise si un deploiement precedent a echoue
+if [ -f "$PROGRESS_FILE" ]; then
+    warn "$RMSG_DEPLOY_PREVIOUS_FAILED"
+    echo "$RMSG_DEPLOY_RESUMING"
+    echo ""
+fi
+
+# --- Verifications prealables ---
 if ! command -v docker &>/dev/null; then
-    err "Docker n'est pas installé. Lancez d'abord setup.sh."
+    err "$RMSG_DEPLOY_ERR_NO_DOCKER"
     exit 1
 fi
 
 if ! command -v git &>/dev/null; then
-    err "Git n'est pas installé. Lancez d'abord setup.sh."
+    err "$RMSG_DEPLOY_ERR_NO_GIT"
     exit 1
 fi
 
@@ -739,9 +788,9 @@ fi
 
 # Fonction : configurer l'accès SSH GitHub (multi-comptes)
 setup_github_ssh() {
-    echo -e "${BOLD}${YELLOW}[>] Connexion à GitHub${NC}"
-    echo "  Pour télécharger votre code depuis GitHub, le serveur"
-    echo "  a besoin d'une clé SSH liée à votre compte GitHub."
+    echo -e "${BOLD}${YELLOW}[>] $RMSG_DEPLOY_GH_TITLE${NC}"
+    echo "$RMSG_DEPLOY_GH_INTRO1"
+    echo "$RMSG_DEPLOY_GH_INTRO2"
     echo ""
 
     SSH_DIR="/home/$USERNAME/.ssh"
@@ -758,7 +807,7 @@ setup_github_ssh() {
     GH_LABEL=""
 
     if [ -n "$GITHUB_HOSTS" ]; then
-        success "Des comptes GitHub sont déjà configurés sur ce serveur :"
+        success "$RMSG_DEPLOY_GH_EXISTING_ACCOUNTS"
         echo ""
         INDEX=1
         while IFS= read -r host; do
@@ -767,7 +816,7 @@ setup_github_ssh() {
             if [ -f "${KEY_FILE}.pub" ]; then
                 KEY_INFO=$(head -1 "${KEY_FILE}.pub" | awk '{print $3}')
             else
-                KEY_INFO="clé introuvable"
+                KEY_INFO="$RMSG_DEPLOY_GH_KEY_NOT_FOUND"
             fi
             printf "    %2d) %s (%s)\n" "$INDEX" "$LABEL" "$KEY_INFO"
             INDEX=$((INDEX + 1))
@@ -775,25 +824,25 @@ setup_github_ssh() {
 
         TOTAL=$((INDEX - 1))
         echo ""
-        echo "    $INDEX) Connecter un nouveau compte GitHub"
+        echo "    $INDEX) $RMSG_DEPLOY_GH_NEW_ACCOUNT_OPT"
         echo ""
-        read -p "  Quel compte utiliser ? : " GH_CHOICE
+        read -p "$RMSG_DEPLOY_GH_SELECT_ACCOUNT_PROMPT" GH_CHOICE
 
         if [ "$GH_CHOICE" -le "$TOTAL" ] 2>/dev/null; then
             SELECTED_HOST=$(echo "$GITHUB_HOSTS" | sed -n "${GH_CHOICE}p")
             GH_LABEL=$(echo "$SELECTED_HOST" | sed 's/^github-//')
-            success "Compte sélectionné : $GH_LABEL"
+            success "$(printf "$RMSG_DEPLOY_GH_ACCOUNT_SELECTED" "$GH_LABEL")"
         fi
     fi
 
     # Ajouter un nouveau compte si nécessaire
     if [ -z "$GH_LABEL" ]; then
         echo ""
-        echo "  On va connecter votre compte GitHub à ce serveur."
-        echo "  Donnez un nom pour identifier ce compte (par exemple"
-        echo "  'perso' pour votre GitHub personnel, 'travail' pour celui du boulot)."
+        echo "$RMSG_DEPLOY_GH_CONNECT_INTRO1"
+        echo "$RMSG_DEPLOY_GH_CONNECT_INTRO2"
+        echo "$RMSG_DEPLOY_GH_CONNECT_INTRO3"
         echo ""
-        read -p "  Nom du compte (ex: perso, travail) : " GH_LABEL
+        read -p "$RMSG_DEPLOY_GH_LABEL_PROMPT" GH_LABEL
         GH_LABEL=$(echo "$GH_LABEL" | tr -cd 'a-zA-Z0-9-' | tr '[:upper:]' '[:lower:]')
 
         if [ -z "$GH_LABEL" ]; then
@@ -804,9 +853,9 @@ setup_github_ssh() {
 
         if [ ! -f "$KEY_PATH" ]; then
             echo ""
-            info "Génération d'une clé de sécurité pour le compte '$GH_LABEL'..."
+            info "$(printf "$RMSG_DEPLOY_GH_KEY_GENERATING" "$GH_LABEL")"
             sudo -u "$USERNAME" ssh-keygen -t ed25519 -C "vps-$GH_LABEL" -f "$KEY_PATH" -N ""
-            success "Clé générée."
+            success "$RMSG_DEPLOY_GH_KEY_GENERATED"
         fi
 
         # Ajouter le bloc dans ~/.ssh/config
@@ -825,49 +874,48 @@ SSH_BLOCK
         # Afficher la clé publique avec instructions détaillées
         echo ""
         echo "========================================="
-        echo -e "  ${YELLOW}IMPORTANT : Ajoutez cette clé sur GitHub${NC}"
+        echo -e "  ${YELLOW}$RMSG_DEPLOY_GH_ADD_KEY_TITLE${NC}"
         echo "========================================="
         echo ""
-        echo "  Copiez toute la ligne ci-dessous :"
+        echo "$RMSG_DEPLOY_GH_ADD_KEY_COPY"
         echo ""
         echo -e "  ${GREEN}$(cat "${KEY_PATH}.pub")${NC}"
         echo ""
-        echo "  Puis suivez ces étapes :"
+        echo "$RMSG_DEPLOY_GH_ADD_KEY_STEPS_INTRO"
         echo ""
-        echo "    1. Ouvrez https://github.com/settings/keys"
-        echo "       (Connectez-vous à GitHub si besoin)"
+        echo "$RMSG_DEPLOY_GH_ADD_KEY_STEP1"
+        echo "$RMSG_DEPLOY_GH_ADD_KEY_STEP1B"
         echo ""
-        echo "    2. Cliquez le bouton vert 'New SSH key'"
+        echo "$RMSG_DEPLOY_GH_ADD_KEY_STEP2"
         echo ""
-        echo "    3. Dans 'Title', mettez : VPS $GH_LABEL"
+        echo "$(printf "$RMSG_DEPLOY_GH_ADD_KEY_STEP3" "$GH_LABEL")"
         echo ""
-        echo "    4. Dans 'Key', collez la ligne copiée plus haut"
+        echo "$RMSG_DEPLOY_GH_ADD_KEY_STEP4"
         echo ""
-        echo "    5. Cliquez 'Add SSH key'"
+        echo "$RMSG_DEPLOY_GH_ADD_KEY_STEP5"
         echo ""
         echo "========================================="
         echo ""
-        read -p "  Appuyez sur Entrée quand c'est fait... "
+        read -p "$RMSG_DEPLOY_GH_ADD_KEY_WAIT_PROMPT"
 
         # Tester la connexion
         echo ""
-        info "Vérification de la connexion avec GitHub..."
+        info "$RMSG_DEPLOY_GH_TESTING"
         if sudo -u "$USERNAME" ssh -T -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 -i "$KEY_PATH" git@github.com 2>&1 | grep -qi "successfully authenticated"; then
-            success "Connexion GitHub réussie !"
+            success "$RMSG_DEPLOY_GH_SUCCESS"
         else
             echo ""
-            warn "La connexion n'a pas fonctionné."
+            warn "$RMSG_DEPLOY_GH_FAILED"
             echo ""
-            echo "  Vérifiez que :"
-            echo "    - Vous avez bien copié TOUTE la clé (la ligne entière)"
-            echo "    - Vous avez cliqué 'Add SSH key' sur GitHub"
-            echo "    - Vous êtes connecté au bon compte GitHub"
+            echo "$RMSG_DEPLOY_GH_FAILED_CHECK1"
+            echo "$RMSG_DEPLOY_GH_FAILED_CHECK2"
+            echo "$RMSG_DEPLOY_GH_FAILED_CHECK3"
             echo ""
-            read -p "  Appuyez sur Entrée pour réessayer... "
+            read -p "$RMSG_DEPLOY_GH_RETRY_PROMPT"
             if sudo -u "$USERNAME" ssh -T -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 -i "$KEY_PATH" git@github.com 2>&1 | grep -qi "successfully authenticated"; then
-                success "Connexion GitHub réussie !"
+                success "$RMSG_DEPLOY_GH_SUCCESS"
             else
-                err "Connexion impossible. Vérifiez la clé sur GitHub et relancez le script."
+                err "$RMSG_DEPLOY_GH_IMPOSSIBLE"
                 exit 1
             fi
         fi
@@ -883,20 +931,33 @@ convert_https_to_ssh() {
 }
 
 # Si l'URL est déjà en SSH → configurer directement
-if echo "$REPO_URL" | grep -q "^git@github.com"; then
+CURRENT_STEP="configuration_github_ssh"
+if is_done "step_github"; then
+    skip_step "$RMSG_DEPLOY_GH_TITLE"
+elif echo "$REPO_URL" | grep -q "^git@github.com"; then
     setup_github_ssh
+    mark_done "step_github"
 fi
 
 # =========================================
 # DÉPLOIEMENT DE L'APPLICATION
 # =========================================
 
-# === TÉLÉCHARGEMENT DU CODE ===
+# === TELECHARGEMENT DU CODE ===
+CURRENT_STEP="telechargement_code"
 echo ""
-echo -e "${BOLD}${YELLOW}[>] Téléchargement du code source${NC}"
+echo -e "${BOLD}${YELLOW}[>] $RMSG_DEPLOY_CODE_TITLE${NC}"
+
+# Verifier l'integrite du depot si le dossier existe
+if [ -d "$APP_DIR/.git" ]; then
+    if ! sudo -u "$USERNAME" git -C "$APP_DIR" rev-parse HEAD &>/dev/null; then
+        warn "$RMSG_DEPLOY_REPO_CORRUPT"
+        rm -rf "$APP_DIR"
+    fi
+fi
 
 if [ -d "$APP_DIR/.git" ]; then
-    info "Dépôt existant détecté. Mise à jour (git pull)..."
+    info "$RMSG_DEPLOY_REPO_EXISTS"
     cd "$APP_DIR"
     # Sauvegarder le commit actuel avant mise à jour (pour rollback)
     CURRENT_COMMIT=$(sudo -u "$USERNAME" git rev-parse HEAD 2>/dev/null || true)
@@ -907,33 +968,33 @@ if [ -d "$APP_DIR/.git" ]; then
     sudo -u "$USERNAME" git fetch --all 2>/dev/null || true
     if [ -n "$DEPLOY_TAG" ]; then
         sudo -u "$USERNAME" git checkout "$DEPLOY_TAG"
-        success "Code mis a jour (tag : $DEPLOY_TAG)."
+        success "$(printf "$RMSG_DEPLOY_CODE_UPDATED_TAG" "$DEPLOY_TAG")"
     elif [ -n "$DEPLOY_BRANCH" ]; then
         sudo -u "$USERNAME" git checkout "$DEPLOY_BRANCH" 2>/dev/null || sudo -u "$USERNAME" git checkout -b "$DEPLOY_BRANCH" "origin/$DEPLOY_BRANCH"
         sudo -u "$USERNAME" git pull origin "$DEPLOY_BRANCH"
-        success "Code mis a jour (branche : $DEPLOY_BRANCH)."
+        success "$(printf "$RMSG_DEPLOY_CODE_UPDATED_BRANCH" "$DEPLOY_BRANCH")"
     else
         sudo -u "$USERNAME" git pull
-        success "Code mis a jour."
+        success "$RMSG_DEPLOY_CODE_UPDATED"
     fi
 else
-    info "Clonage du depot..."
+    info "$RMSG_DEPLOY_CLONING"
     mkdir -p "/home/$USERNAME/apps"
 
     # Tenter le clone. Si HTTPS échoue (repo privé), basculer en SSH.
     if sudo -u "$USERNAME" git clone "$REPO_URL" "$APP_DIR" 2>/tmp/git-clone-err.log; then
         rm -f /tmp/git-clone-err.log
-        success "Dépôt cloné dans $APP_DIR"
+        success "$(printf "$RMSG_DEPLOY_CLONE_SUCCESS" "$APP_DIR")"
     else
         # Vérifier si c'est une URL HTTPS GitHub qui a échoué
         if echo "$REPO_URL" | grep -qE "^https?://github\.com/"; then
             echo ""
-            warn "Le clonage a échoué."
-            echo "  Ce dépôt est probablement privé."
-            echo "  GitHub ne permet pas le clonage HTTPS sans authentification."
+            warn "$RMSG_DEPLOY_CLONE_FAILED_PRIVATE"
+            echo "$RMSG_DEPLOY_CLONE_PRIVATE_HINT1"
+            echo "$RMSG_DEPLOY_CLONE_PRIVATE_HINT2"
             echo ""
-            echo "  Pas de souci ! On va configurer une clé SSH pour accéder"
-            echo "  à vos dépôts privés en toute sécurité."
+            echo "$RMSG_DEPLOY_CLONE_PRIVATE_HINT3"
+            echo "$RMSG_DEPLOY_CLONE_PRIVATE_HINT4"
             echo ""
 
             # Convertir en SSH et lancer le flow multi-comptes
@@ -941,11 +1002,11 @@ else
             setup_github_ssh
 
             # Retenter le clone avec SSH
-            info "Nouvelle tentative de clonage avec la clé SSH..."
+            info "$RMSG_DEPLOY_CLONE_RETRY_SSH"
             sudo -u "$USERNAME" git clone "$REPO_URL" "$APP_DIR"
-            success "Dépôt cloné dans $APP_DIR"
+            success "$(printf "$RMSG_DEPLOY_CLONE_SUCCESS" "$APP_DIR")"
         else
-            err "Échec du clonage."
+            err "$RMSG_DEPLOY_CLONE_FAILED"
             cat /tmp/git-clone-err.log
             exit 1
         fi
@@ -958,49 +1019,58 @@ cd "$APP_DIR"
 # Checkout de la branche ou du tag demande (apres clone)
 if [ -n "$DEPLOY_TAG" ]; then
     sudo -u "$USERNAME" git checkout "$DEPLOY_TAG" 2>/dev/null || true
-    info "Tag selectionne : $DEPLOY_TAG"
+    info "$(printf "$RMSG_DEPLOY_TAG_SELECTED" "$DEPLOY_TAG")"
 elif [ -n "$DEPLOY_BRANCH" ]; then
     sudo -u "$USERNAME" git checkout "$DEPLOY_BRANCH" 2>/dev/null || true
-    info "Branche selectionnee : $DEPLOY_BRANCH"
+    info "$(printf "$RMSG_DEPLOY_BRANCH_SELECTED" "$DEPLOY_BRANCH")"
 fi
 
 # === FICHIER .ENV ===
-if [ "$HAS_ENV" = "true" ]; then
+CURRENT_STEP="installation_env"
+if is_done "step_env"; then
+    skip_step "$RMSG_DEPLOY_ENV_TITLE"
+elif [ "$HAS_ENV" = "true" ]; then
     echo ""
-    echo -e "${BOLD}${YELLOW}[>] Configuration des variables d'environnement${NC}"
+    echo -e "${BOLD}${YELLOW}[>] $RMSG_DEPLOY_ENV_TITLE${NC}"
     if [ -f "/tmp/.env-$APP_NAME" ]; then
         cp "/tmp/.env-$APP_NAME" "$APP_DIR/.env"
         chown "$USERNAME:$USERNAME" "$APP_DIR/.env"
         chmod 600 "$APP_DIR/.env"
         rm -f "/tmp/.env-$APP_NAME"
-        success "Fichier .env installé et sécurisé."
+        success "$RMSG_DEPLOY_ENV_INSTALLED"
     else
-        warn "Fichier .env attendu mais non trouvé sur le serveur."
+        warn "$RMSG_DEPLOY_ENV_MISSING"
     fi
+    mark_done "step_env"
 elif [ "$CREATE_EMPTY_ENV" = "true" ]; then
     echo ""
-    echo -e "${BOLD}${YELLOW}[>] Configuration des variables d'environnement${NC}"
+    echo -e "${BOLD}${YELLOW}[>] $RMSG_DEPLOY_ENV_TITLE${NC}"
     if [ ! -f "$APP_DIR/.env" ]; then
         touch "$APP_DIR/.env"
         chown "$USERNAME:$USERNAME" "$APP_DIR/.env"
         chmod 600 "$APP_DIR/.env"
-        warn "Fichier .env vide créé dans $APP_DIR/.env"
-        echo "  Vous devez le remplir avec vos variables d'environnement."
-        echo "  Connectez-vous au serveur et éditez-le :"
+        warn "$(printf "$RMSG_DEPLOY_ENV_EMPTY_CREATED" "$APP_DIR")"
+        echo "$RMSG_DEPLOY_ENV_FILL_REMINDER"
+        echo "$RMSG_DEPLOY_ENV_FILL_HOW"
         echo ""
         echo "    nano $APP_DIR/.env"
         echo ""
-        echo "  Puis relancez l'application :"
+        echo "$RMSG_DEPLOY_ENV_RELAUNCH"
         echo "    cd $APP_DIR && docker compose up -d --build"
     else
-        info "Un fichier .env existe déjà dans $APP_DIR"
+        info "$(printf "$RMSG_DEPLOY_ENV_EXISTS" "$APP_DIR")"
     fi
+    mark_done "step_env"
 fi
 
-# === BUILD ET DÉMARRAGE ===
+# === BUILD ET DEMARRAGE ===
+CURRENT_STEP="build_docker"
+if is_done "step_docker"; then
+    skip_step "$RMSG_DEPLOY_DOCKER_TITLE"
+else
 echo ""
-echo -e "${BOLD}${YELLOW}[>] Construction et lancement de l'application${NC}"
-echo "  Détection du type de projet..."
+echo -e "${BOLD}${YELLOW}[>] $RMSG_DEPLOY_DOCKER_TITLE${NC}"
+echo "$RMSG_DEPLOY_DOCKER_DETECT"
 echo ""
 
 COMPOSE_FILE=""
@@ -1012,36 +1082,36 @@ for f in docker-compose.yml docker-compose.yaml compose.yml compose.yaml; do
 done
 
 if [ -n "$COMPOSE_FILE" ]; then
-    info "Fichier $COMPOSE_FILE détecté."
-    echo "  Lancement avec Docker Compose (ça peut prendre quelques minutes)..."
+    info "$(printf "$RMSG_DEPLOY_COMPOSE_DETECTED" "$COMPOSE_FILE")"
+    echo "$RMSG_DEPLOY_COMPOSE_LAUNCHING"
     echo ""
     cd "$APP_DIR"
     if ! sudo -u "$USERNAME" docker compose up -d --build 2>&1; then
-        err "Échec du lancement avec Docker Compose."
+        err "$RMSG_DEPLOY_COMPOSE_FAILED"
         echo ""
-        echo "  Derniers logs :"
+        echo "$RMSG_DEPLOY_COMPOSE_FAILED_LOGS"
         sudo -u "$USERNAME" docker compose logs --tail=20 2>/dev/null || true
         echo ""
-        echo "  Pour voir tous les logs :"
+        echo "$RMSG_DEPLOY_COMPOSE_FAILED_SEE_ALL"
         echo "    cd $APP_DIR && docker compose logs"
         exit 1
     fi
     echo ""
-    success "Application lancée avec Docker Compose."
+    success "$RMSG_DEPLOY_COMPOSE_SUCCESS"
 elif [ -f "$APP_DIR/Dockerfile" ]; then
-    info "Dockerfile détecté."
-    echo "  Construction de l'image Docker (ça peut prendre quelques minutes)..."
+    info "$RMSG_DEPLOY_DOCKERFILE_DETECTED"
+    echo "$RMSG_DEPLOY_DOCKER_BUILD_HINT"
     echo ""
     if ! sudo -u "$USERNAME" docker build -t "$APP_NAME" "$APP_DIR"; then
-        err "Échec de la construction de l'image Docker."
+        err "$RMSG_DEPLOY_DOCKER_BUILD_FAILED"
         echo ""
-        echo "  Vérifiez votre Dockerfile et relancez le déploiement."
+        echo "$RMSG_DEPLOY_DOCKER_BUILD_FAILED_HINT"
         exit 1
     fi
 
     # Arrêter le conteneur existant s'il tourne
     if docker ps -a -q -f "name=^${APP_NAME}$" | grep -q .; then
-        info "Arrêt de l'ancienne version..."
+        info "$RMSG_DEPLOY_DOCKER_STOP_OLD"
         docker stop "$APP_NAME" 2>/dev/null || true
         docker rm "$APP_NAME" 2>/dev/null || true
     fi
@@ -1052,59 +1122,67 @@ elif [ -f "$APP_DIR/Dockerfile" ]; then
     fi
 
     if ! sudo -u "$USERNAME" docker run $DOCKER_RUN_ARGS "$APP_NAME"; then
-        err "Échec du lancement du conteneur."
+        err "$RMSG_DEPLOY_DOCKER_RUN_FAILED"
         echo ""
-        echo "  Derniers logs :"
+        echo "$RMSG_DEPLOY_DOCKER_RUN_FAILED_LOGS"
         docker logs "$APP_NAME" --tail=20 2>/dev/null || true
         exit 1
     fi
     echo ""
-    success "Application lancée sur le port $APP_PORT."
+    success "$(printf "$RMSG_DEPLOY_DOCKER_SUCCESS" "$APP_PORT")"
 else
-    err "Impossible de déployer : aucun fichier Docker trouvé."
+    err "$RMSG_DEPLOY_DOCKER_NONE"
     echo ""
-    echo "  Votre dépôt doit contenir l'un de ces fichiers :"
-    echo "    - docker-compose.yml (ou compose.yml)"
-    echo "    - Dockerfile"
+    echo "$RMSG_DEPLOY_DOCKER_NONE_HINT1"
+    echo "$RMSG_DEPLOY_DOCKER_NONE_HINT2"
+    echo "$RMSG_DEPLOY_DOCKER_NONE_HINT3"
     echo ""
-    echo "  Ajoutez-en un dans votre dépôt et relancez le déploiement."
+    echo "$RMSG_DEPLOY_DOCKER_NONE_HINT4"
     exit 1
 fi
 
-# === VÉRIFICATION DNS ===
+mark_done "step_docker"
+fi
+# Fin du bloc step_docker
+
+# === VERIFICATION DNS ===
+CURRENT_STEP="verification_dns"
 echo ""
-echo -e "${BOLD}${YELLOW}[>] Vérification du DNS${NC}"
+echo -e "${BOLD}${YELLOW}[>] $RMSG_DEPLOY_DNS_TITLE${NC}"
 SERVER_IP=$(hostname -I 2>/dev/null | awk '{print $1}' || true)
 DOMAIN_IP=$(getent hosts "$DOMAIN" 2>/dev/null | awk '{print $1}' || true)
 
 if [ -z "$DOMAIN_IP" ]; then
-    warn "Le domaine $DOMAIN ne pointe vers aucune adresse IP."
-    echo "  Le certificat SSL ne pourra pas être généré tant que le DNS"
-    echo "  ne pointe pas vers ce serveur ($SERVER_IP)."
+    warn "$(printf "$RMSG_DEPLOY_DNS_NO_IP" "$DOMAIN")"
+    echo "$RMSG_DEPLOY_DNS_NO_IP_HINT1"
+    echo "$(printf "$RMSG_DEPLOY_DNS_NO_IP_HINT2" "$SERVER_IP")"
     echo ""
-    echo "  Configurez un enregistrement A chez votre registrar :"
+    echo "$RMSG_DEPLOY_DNS_NO_IP_CONFIGURE"
     echo "    $DOMAIN -> $SERVER_IP"
     echo ""
 elif [ "$DOMAIN_IP" != "$SERVER_IP" ]; then
-    warn "Le domaine $DOMAIN pointe vers $DOMAIN_IP (et non $SERVER_IP)."
-    echo "  Le certificat SSL ne fonctionnera pas tant que le DNS ne pointe"
-    echo "  pas vers ce serveur."
+    warn "$(printf "$RMSG_DEPLOY_DNS_WRONG_IP" "$DOMAIN" "$DOMAIN_IP" "$SERVER_IP")"
+    echo "$RMSG_DEPLOY_DNS_WRONG_IP_HINT"
     echo ""
 else
-    success "Le DNS de $DOMAIN pointe bien vers ce serveur."
+    success "$(printf "$RMSG_DEPLOY_DNS_OK" "$DOMAIN")"
 fi
 
 # === CONFIGURATION DU DOMAINE ===
+CURRENT_STEP="configuration_caddy"
+if is_done "step_caddy"; then
+    skip_step "$RMSG_DEPLOY_CADDY_TITLE"
+else
 echo ""
-echo -e "${BOLD}${YELLOW}[>] Configuration du domaine et HTTPS${NC}"
-echo "  Caddy va rediriger $DOMAIN vers votre application"
-echo "  et générer un certificat SSL automatiquement."
+echo -e "${BOLD}${YELLOW}[>] $RMSG_DEPLOY_CADDY_TITLE${NC}"
+echo "$(printf "$RMSG_DEPLOY_CADDY_INTRO1" "$DOMAIN")"
+echo "$RMSG_DEPLOY_CADDY_INTRO2"
 echo ""
 
 if ! command -v caddy &>/dev/null; then
-    warn "Caddy n'est pas installé sur ce serveur."
-    echo "  Lancez d'abord setup.sh pour installer Caddy,"
-    echo "  ou configurez le reverse proxy manuellement."
+    warn "$RMSG_DEPLOY_CADDY_NOT_INSTALLED"
+    echo "$RMSG_DEPLOY_CADDY_NOT_INSTALLED_HINT1"
+    echo "$RMSG_DEPLOY_CADDY_NOT_INSTALLED_HINT2"
 else
     CADDYFILE="/etc/caddy/Caddyfile"
 
@@ -1113,7 +1191,7 @@ else
 
     # Vérifier si le domaine est déjà configuré
     if grep -qF "${DOMAIN}" "$CADDYFILE" 2>/dev/null; then
-        info "Le domaine $DOMAIN était déjà configuré, mise à jour..."
+        info "$(printf "$RMSG_DEPLOY_CADDY_DOMAIN_UPDATING" "$DOMAIN")"
         # Supprimer le bloc Caddy existant (gere les blocs imbriques)
         awk -v domain="$DOMAIN" '
         BEGIN { skip=0; depth=0 }
@@ -1161,136 +1239,154 @@ CADDY_BLOCK
     # Valider la configuration avant de recharger
     if caddy validate --config "$CADDYFILE" --adapter caddyfile 2>/dev/null; then
         if systemctl reload caddy 2>/dev/null; then
-            success "Domaine configuré ! Caddy va générer le certificat SSL."
+            success "$RMSG_DEPLOY_CADDY_SUCCESS"
         else
-            err "Caddy n'a pas pu recharger la configuration."
-            echo "  Vérifiez avec : sudo systemctl status caddy"
+            err "$RMSG_DEPLOY_CADDY_RELOAD_FAILED"
+            echo "$RMSG_DEPLOY_CADDY_RELOAD_FAILED_HINT"
         fi
     else
-        err "Erreur dans la configuration du domaine."
+        err "$RMSG_DEPLOY_CADDY_CONFIG_ERROR"
         cp "${CADDYFILE}.bak" "$CADDYFILE"
         systemctl reload caddy 2>/dev/null
-        warn "Configuration restaurée. Le domaine n'a pas été ajouté."
+        warn "$RMSG_DEPLOY_CADDY_CONFIG_RESTORED"
     fi
 fi
 
+mark_done "step_caddy"
+fi
+# Fin du bloc step_caddy
+
 # =========================================
-# VÉRIFICATION DE L'APPLICATION
+# VERIFICATION DE L'APPLICATION
 # =========================================
 
+CURRENT_STEP="verification_application"
 echo ""
-echo -e "${BOLD}${YELLOW}[>] Vérification de l'application${NC}"
-echo "  Attente du démarrage (5 secondes)..."
+echo -e "${BOLD}${YELLOW}[>] $RMSG_DEPLOY_HEALTH_TITLE${NC}"
+echo "$RMSG_DEPLOY_HEALTH_WAIT"
 sleep 5
 
 HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:${APP_PORT}" 2>/dev/null || echo "000")
 
 if [ "$HTTP_CODE" = "000" ]; then
-    warn "L'application ne répond pas sur le port $APP_PORT."
+    warn "$(printf "$RMSG_DEPLOY_HEALTH_NOT_RESPONDING" "$APP_PORT")"
     echo ""
-    echo "  Ça peut être normal si l'application met du temps à démarrer."
-    echo "  Vérifiez les logs :"
+    echo "$RMSG_DEPLOY_HEALTH_NOT_RESPONDING_HINT1"
+    echo "$RMSG_DEPLOY_HEALTH_NOT_RESPONDING_HINT2"
     echo "    docker logs $APP_NAME --tail=30"
     echo "    ou : cd $APP_DIR && docker compose logs --tail=30"
 elif [ "$HTTP_CODE" -ge 200 ] && [ "$HTTP_CODE" -lt 400 ]; then
-    success "L'application répond correctement (HTTP $HTTP_CODE)."
+    success "$(printf "$RMSG_DEPLOY_HEALTH_OK" "$HTTP_CODE")"
 else
-    warn "L'application répond avec le code HTTP $HTTP_CODE."
-    echo "  Vérifiez les logs : docker logs $APP_NAME --tail=30"
+    warn "$(printf "$RMSG_DEPLOY_HEALTH_WARN" "$HTTP_CODE")"
 fi
 
 # =========================================
-# SAUVEGARDE DES MÉTADONNÉES
+# SAUVEGARDE DES METADONNEES
 # =========================================
 
-echo "$DOMAIN" > "$APP_DIR/.deploy-domain"
-echo "$APP_PORT" > "$APP_DIR/.deploy-port"
-chown "$USERNAME:$USERNAME" "$APP_DIR/.deploy-domain" "$APP_DIR/.deploy-port"
+CURRENT_STEP="sauvegarde_metadonnees"
+if ! is_done "step_meta"; then
+    echo "$DOMAIN" > "$APP_DIR/.deploy-domain"
+    echo "$APP_PORT" > "$APP_DIR/.deploy-port"
+    chown "$USERNAME:$USERNAME" "$APP_DIR/.deploy-domain" "$APP_DIR/.deploy-port"
 
-if [ -n "$DEPLOY_TAG" ]; then
-    echo "$DEPLOY_TAG" > "$APP_DIR/.deploy-branch"
-elif [ -n "$DEPLOY_BRANCH" ]; then
-    echo "$DEPLOY_BRANCH" > "$APP_DIR/.deploy-branch"
-else
-    echo "main" > "$APP_DIR/.deploy-branch"
+    if [ -n "$DEPLOY_TAG" ]; then
+        echo "$DEPLOY_TAG" > "$APP_DIR/.deploy-branch"
+    elif [ -n "$DEPLOY_BRANCH" ]; then
+        echo "$DEPLOY_BRANCH" > "$APP_DIR/.deploy-branch"
+    else
+        echo "main" > "$APP_DIR/.deploy-branch"
+    fi
+    chown "$USERNAME:$USERNAME" "$APP_DIR/.deploy-branch"
+    mark_done "step_meta"
 fi
-chown "$USERNAME:$USERNAME" "$APP_DIR/.deploy-branch"
 
 # =========================================
 # HISTORIQUE DE DEPLOIEMENT
 # =========================================
 
-HISTORY_FILE="/home/$USERNAME/.deploy-history"
-DEPLOY_DATE=$(date '+%Y-%m-%d %H:%M:%S')
-DEPLOY_COMMIT=$(cd "$APP_DIR" && sudo -u "$USERNAME" git rev-parse --short HEAD 2>/dev/null || echo "inconnu")
-DEPLOY_BRANCH_INFO=""
-if [ -n "$DEPLOY_TAG" ]; then
-    DEPLOY_BRANCH_INFO="$DEPLOY_TAG"
-elif [ -n "$DEPLOY_BRANCH" ]; then
-    DEPLOY_BRANCH_INFO="$DEPLOY_BRANCH"
-else
-    DEPLOY_BRANCH_INFO=$(cd "$APP_DIR" && sudo -u "$USERNAME" git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "main")
-fi
-
-echo "$DEPLOY_DATE | $APP_NAME | $DEPLOY_COMMIT | $DEPLOY_BRANCH_INFO | $DOMAIN | deploy" >> "$HISTORY_FILE"
-
-# Garder les 50 dernieres entrees
-if [ -f "$HISTORY_FILE" ]; then
-    TOTAL_LINES=$(wc -l < "$HISTORY_FILE")
-    if [ "$TOTAL_LINES" -gt 50 ]; then
-        tail -n 50 "$HISTORY_FILE" > "${HISTORY_FILE}.tmp"
-        mv "${HISTORY_FILE}.tmp" "$HISTORY_FILE"
+CURRENT_STEP="historique"
+if ! is_done "step_history"; then
+    HISTORY_FILE="/home/$USERNAME/.deploy-history"
+    DEPLOY_DATE=$(date '+%Y-%m-%d %H:%M:%S')
+    DEPLOY_COMMIT=$(cd "$APP_DIR" && sudo -u "$USERNAME" git rev-parse --short HEAD 2>/dev/null || echo "$RMSG_ROLLBACK_FALLBACK_UNKNOWN")
+    DEPLOY_BRANCH_INFO=""
+    if [ -n "$DEPLOY_TAG" ]; then
+        DEPLOY_BRANCH_INFO="$DEPLOY_TAG"
+    elif [ -n "$DEPLOY_BRANCH" ]; then
+        DEPLOY_BRANCH_INFO="$DEPLOY_BRANCH"
+    else
+        DEPLOY_BRANCH_INFO=$(cd "$APP_DIR" && sudo -u "$USERNAME" git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "main")
     fi
+
+    echo "$DEPLOY_DATE | $APP_NAME | $DEPLOY_COMMIT | $DEPLOY_BRANCH_INFO | $DOMAIN | deploy" >> "$HISTORY_FILE"
+
+    # Garder les 50 dernieres entrees
+    if [ -f "$HISTORY_FILE" ]; then
+        TOTAL_LINES=$(wc -l < "$HISTORY_FILE")
+        if [ "$TOTAL_LINES" -gt 50 ]; then
+            tail -n 50 "$HISTORY_FILE" > "${HISTORY_FILE}.tmp"
+            mv "${HISTORY_FILE}.tmp" "$HISTORY_FILE"
+        fi
+    fi
+    chown "$USERNAME:$USERNAME" "$HISTORY_FILE"
+    mark_done "step_history"
 fi
-chown "$USERNAME:$USERNAME" "$HISTORY_FILE"
 
 # =========================================
 # NETTOYAGE DOCKER
 # =========================================
 
+CURRENT_STEP="nettoyage_docker"
 echo ""
-echo -e "${BOLD}${YELLOW}[>] Nettoyage Docker${NC}"
+echo -e "${BOLD}${YELLOW}[>] $RMSG_DEPLOY_PRUNE_TITLE${NC}"
 
 PRUNE_OUTPUT=$(docker image prune -f 2>/dev/null || true)
 PRUNE_SIZE=$(echo "$PRUNE_OUTPUT" | grep -ioE '[0-9.]+ ?[kKmMgGtT]?B' | tail -1 || echo "")
 if [ -n "$PRUNE_SIZE" ] && [ "$PRUNE_SIZE" != "0B" ]; then
-    success "Images inutilisees supprimees : $PRUNE_SIZE liberes"
+    success "$(printf "$RMSG_DEPLOY_PRUNE_IMAGES_DONE" "$PRUNE_SIZE")"
 else
-    info "Aucune image inutilisee a supprimer."
+    info "$RMSG_DEPLOY_PRUNE_IMAGES_NONE"
 fi
 
 BUILD_OUTPUT=$(docker builder prune -f --filter "until=24h" 2>/dev/null || true)
 BUILD_SIZE=$(echo "$BUILD_OUTPUT" | grep -ioE '[0-9.]+ ?[kKmMgGtT]?B' | tail -1 || echo "")
 if [ -n "$BUILD_SIZE" ] && [ "$BUILD_SIZE" != "0B" ]; then
-    success "Cache de build nettoye : $BUILD_SIZE liberes"
+    success "$(printf "$RMSG_DEPLOY_PRUNE_BUILD_DONE" "$BUILD_SIZE")"
 fi
 
 # =========================================
-# C'EST TERMINÉ !
+# C'EST TERMINE !
 # =========================================
+
+# Supprimer le fichier de progression (deploiement reussi)
+rm -f "$PROGRESS_FILE"
 
 echo ""
 echo "========================================="
-echo -e "  ${GREEN}DÉPLOIEMENT TERMINÉ !${NC}"
+echo -e "  ${GREEN}$RMSG_DEPLOY_DONE_TITLE${NC}"
 echo "========================================="
 echo ""
-echo "  Application  : $APP_NAME"
-echo "  Adresse      : https://$DOMAIN"
+echo "$(printf "$RMSG_DEPLOY_DONE_APP" "$APP_NAME")"
+echo "$(printf "$RMSG_DEPLOY_DONE_URL" "$DOMAIN")"
 if [ -n "$DEPLOY_TAG" ]; then
-    echo "  Tag          : $DEPLOY_TAG"
+    echo "$(printf "$RMSG_DEPLOY_DONE_TAG" "$DEPLOY_TAG")"
 elif [ -n "$DEPLOY_BRANCH" ]; then
-    echo "  Branche      : $DEPLOY_BRANCH"
+    echo "$(printf "$RMSG_DEPLOY_DONE_BRANCH" "$DEPLOY_BRANCH")"
 fi
-echo "  Dossier      : $APP_DIR"
+echo "$(printf "$RMSG_DEPLOY_DONE_DIR" "$APP_DIR")"
 echo ""
-echo "  Le certificat SSL (HTTPS) est généré automatiquement."
+echo "$RMSG_DEPLOY_DONE_SSL"
 echo ""
-echo "  Commandes utiles :"
-echo "    Voir les logs    : docker logs $APP_NAME --tail=50"
-echo "    Redémarrer       : cd $APP_DIR && docker compose restart"
-echo "    Arrêter          : cd $APP_DIR && docker compose down"
+echo "$RMSG_DEPLOY_DONE_CMDS_TITLE"
+echo "$(printf "$RMSG_DEPLOY_DONE_CMD_LOGS" "$APP_NAME")"
+echo "$(printf "$RMSG_DEPLOY_DONE_CMD_RESTART" "$APP_DIR")"
+echo "$(printf "$RMSG_DEPLOY_DONE_CMD_STOP" "$APP_DIR")"
 echo "========================================="
 DEPLOY_EOF
+
+inject_lang_into_remote "$TMPSCRIPT"
 
 # =========================================
 # REMPLACEMENT DES PLACEHOLDERS
@@ -1343,25 +1439,25 @@ fi
 
 # Envoyer le fichier .env si nécessaire
 if [ -n "$ENV_FILE" ]; then
-    info "Envoi du fichier .env sur le serveur..."
+    info "$MSG_DEPLOY_ENV_SENDING"
     if ! scp -i "$SSH_KEY" "$ENV_FILE" "${USERNAME}@${VPS_IP}:/tmp/.env-${APP_NAME}"; then
-        err "Impossible d'envoyer le fichier .env. Vérifiez la connexion."
+        err "$MSG_DEPLOY_ENV_SEND_FAILED"
         rm -f "$TMPSCRIPT"
         exit 1
     fi
-    success "Fichier .env envoyé."
+    success "$MSG_DEPLOY_ENV_SENT"
 fi
 
 # Envoyer et exécuter le script distant
-info "Envoi du script de déploiement..."
+info "$MSG_DEPLOY_SCRIPT_SENDING"
 if ! scp -i "$SSH_KEY" "$TMPSCRIPT" "${USERNAME}@${VPS_IP}:/tmp/vps-deploy-remote.sh"; then
-    err "Impossible d'envoyer le script sur le serveur. Vérifiez la connexion."
+    err "$MSG_DEPLOY_SCRIPT_SEND_FAILED"
     rm -f "$TMPSCRIPT"
     exit 1
 fi
 rm -f "$TMPSCRIPT"
 
-info "Exécution du déploiement sur le serveur..."
+info "$MSG_DEPLOY_EXECUTING"
 
 # Détection TTY pour compatibilité CI/CD
 if [ -t 0 ]; then
@@ -1377,25 +1473,25 @@ ssh $SSH_TTY_FLAG -i "$SSH_KEY" "${USERNAME}@${VPS_IP}" "chmod 700 /tmp/vps-depl
 # =========================================
 
 echo ""
-echo -e "${BOLD}=== DÉPLOIEMENT TERMINÉ ===${NC}"
+echo -e "${BOLD}$MSG_DEPLOY_DONE_TITLE${NC}"
 echo ""
-echo "  Votre application est accessible à :"
+echo "$MSG_DEPLOY_DONE_URL"
 echo ""
 echo -e "    ${GREEN}https://${DOMAIN}${NC}"
 echo ""
 if [ "$CREATE_EMPTY_ENV" = "true" ]; then
     echo ""
-    echo -e "  ${YELLOW}[IMPORTANT] N'oubliez pas de remplir le fichier .env :${NC}"
+    echo -e "  ${YELLOW}$MSG_DEPLOY_DONE_ENV_REMINDER${NC}"
     echo ""
     echo "    ssh -i $SSH_KEY ${USERNAME}@${VPS_IP}"
     echo "    nano ~/apps/${APP_NAME}/.env"
     echo ""
-    echo "  Puis relancez les conteneurs :"
+    echo "$MSG_DEPLOY_DONE_ENV_RESTART"
     echo "    cd ~/apps/${APP_NAME} && docker compose up -d --build"
 fi
 
 echo ""
-echo "  Pour redéployer (après un git push) :"
+echo "$MSG_DEPLOY_DONE_REDEPLOY"
 echo ""
 if [ "$INTERACTIVE" = true ]; then
     echo -e "    ${GREEN}bash deploy.sh${NC}"

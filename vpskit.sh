@@ -24,6 +24,12 @@ err()     { echo -e "${RED}[ERR] $1${NC}"; }
 # --- URL de base du repo ---
 REPO_BASE="https://raw.githubusercontent.com/mariusdjen/vpskit/main"
 
+# --- Chargement de la langue ---
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)"
+if [ -f "${SCRIPT_DIR}/lang.sh" ]; then
+    . "${SCRIPT_DIR}/lang.sh"
+fi
+
 # --- Banniere ---
 show_banner() {
     echo ""
@@ -33,20 +39,21 @@ show_banner() {
     echo " | |/ / ___/\\__ \\|   // /  / /   "
     echo " |___/_/   /____/_/\\_/___/ /_/    "
     echo -e "${NC}"
-    echo -e "  ${BOLD}Set up. Secure. Deploy.${NC}"
+    echo -e "  ${BOLD}${MSG_VPSKIT_TAGLINE:-Set up. Secure. Deploy.}${NC}"
     echo -e "  ${BLUE}https://vpskit.pro${NC}"
     echo ""
 }
 
 # --- Menu principal ---
 show_menu() {
-    echo -e "${BOLD}=== Que voulez-vous faire ? ===${NC}"
+    echo -e "${BOLD}${MSG_VPSKIT_MENU_TITLE}${NC}"
     echo ""
-    echo -e "  ${GREEN}1)${NC} Configurer un nouveau VPS (ou mise a jour)"
-    echo -e "  ${GREEN}2)${NC} Deployer une application"
-    echo -e "  ${GREEN}3)${NC} Voir l'etat du VPS et des apps"
-    echo -e "  ${GREEN}4)${NC} Sauvegarder / Restaurer une app"
-    echo -e "  ${GREEN}5)${NC} Quitter"
+    echo -e "  ${GREEN}1)${NC} ${MSG_VPSKIT_MENU_1}"
+    echo -e "  ${GREEN}2)${NC} ${MSG_VPSKIT_MENU_2}"
+    echo -e "  ${GREEN}3)${NC} ${MSG_VPSKIT_MENU_3}"
+    echo -e "  ${GREEN}4)${NC} ${MSG_VPSKIT_MENU_4}"
+    echo -e "  ${GREEN}5)${NC} ${MSG_VPSKIT_MENU_5}"
+    echo -e "  ${GREEN}6)${NC} ${MSG_VPSKIT_MENU_6}"
     echo ""
 }
 
@@ -60,41 +67,41 @@ run_script() {
     # shellcheck disable=SC2064
     trap "rm -f '$tmp_script'" EXIT
 
-    info "Telechargement de ${script_name}..."
+    info "$(printf "$MSG_VPSKIT_DOWNLOADING" "$script_name")"
 
     if command -v curl &>/dev/null; then
         if ! curl -fsSL "$script_url" -o "$tmp_script"; then
-            err "Impossible de telecharger ${script_name}"
+            err "$(printf "$MSG_VPSKIT_DOWNLOAD_FAILED" "$script_name")"
             rm -f "$tmp_script"
             return 1
         fi
     elif command -v wget &>/dev/null; then
         if ! wget -qO "$tmp_script" "$script_url"; then
-            err "Impossible de telecharger ${script_name}"
+            err "$(printf "$MSG_VPSKIT_DOWNLOAD_FAILED" "$script_name")"
             rm -f "$tmp_script"
             return 1
         fi
     else
-        err "curl ou wget requis"
+        err "$MSG_VPSKIT_NO_CURL_WGET"
         rm -f "$tmp_script"
         return 1
     fi
 
     # Verification que le fichier n'est pas vide
     if [ ! -s "$tmp_script" ]; then
-        err "Le fichier telecharge est vide"
+        err "$MSG_VPSKIT_EMPTY_FILE"
         rm -f "$tmp_script"
         return 1
     fi
 
     # Verification syntaxe bash
     if ! bash -n "$tmp_script" 2>/dev/null; then
-        err "Le script telecharge contient des erreurs de syntaxe"
+        err "$MSG_VPSKIT_SYNTAX_ERROR"
         rm -f "$tmp_script"
         return 1
     fi
 
-    success "Script telecharge et verifie"
+    success "$MSG_VPSKIT_DOWNLOADED"
     echo ""
 
     bash "$tmp_script"
@@ -117,7 +124,7 @@ run_local() {
     local script_path="${script_dir}/${script_name}"
 
     if [ ! -f "$script_path" ]; then
-        err "Script introuvable : ${script_path}"
+        err "$(printf "$MSG_VPSKIT_SCRIPT_NOT_FOUND" "$script_path")"
         return 1
     fi
 
@@ -145,10 +152,11 @@ main() {
             deploy)   shift; launch "deploy.sh" "$@" ;;
             status)   shift; launch "status.sh" "$@" ;;
             backup)   shift; launch "backup.sh" "$@" ;;
+            settings) shift; launch "settings.sh" "$@" ;;
             *)
-                err "Commande inconnue : $1"
+                err "$(printf "$MSG_VPSKIT_UNKNOWN_CMD" "$1")"
                 echo ""
-                echo "  Usage : bash vpskit.sh [setup|deploy|status|backup]"
+                echo "  $MSG_VPSKIT_USAGE"
                 exit 1
                 ;;
         esac
@@ -158,7 +166,7 @@ main() {
     # Mode interactif : afficher le menu
     while true; do
         show_menu
-        read -p "  Votre choix (1-5) : " choice
+        read -p "  $MSG_VPSKIT_CHOICE_PROMPT" choice
 
         case "$choice" in
             1)
@@ -183,12 +191,17 @@ main() {
                 ;;
             5)
                 echo ""
-                info "A bientot !"
+                launch "settings.sh"
+                echo ""
+                ;;
+            6)
+                echo ""
+                info "$MSG_VPSKIT_BYE"
                 exit 0
                 ;;
             *)
                 echo ""
-                warn "Choix invalide, entrez un nombre entre 1 et 5"
+                warn "$MSG_VPSKIT_INVALID_CHOICE"
                 echo ""
                 ;;
         esac

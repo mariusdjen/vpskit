@@ -54,6 +54,12 @@ detect_os() {
 
 detect_os
 
+# --- Chargement de la langue ---
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)"
+if [ -f "${SCRIPT_DIR}/lang.sh" ]; then
+    . "${SCRIPT_DIR}/lang.sh"
+fi
+
 # =========================================
 # ARGUMENTS (MODE CI/CD)
 # =========================================
@@ -69,8 +75,8 @@ while [ $# -gt 0 ]; do
         -key)    SSH_KEY="$2"; shift 2 ;;
         -user)   USERNAME="$2"; shift 2 ;;
         *)
-            err "Argument inconnu : $1"
-            echo "  Usage : bash status.sh -ip IP -key CLE -user USER"
+            err "$(printf "$MSG_STATUS_UNKNOWN_ARG" "$1")"
+            echo "$MSG_STATUS_USAGE"
             exit 1
             ;;
     esac
@@ -85,7 +91,7 @@ if [ "$INTERACTIVE" = true ]; then
     echo ""
     echo "========================================="
     echo -e "  ${BOLD}VPS STATUS${NC}"
-    echo "  Affiche l'etat de votre VPS"
+    echo "  $MSG_STATUS_HEADER"
     echo "========================================="
     echo ""
 
@@ -96,32 +102,32 @@ if [ "$INTERACTIVE" = true ]; then
         VPS_IP=$(read_state_var "$LOCAL_STATE" "VPS_IP")
         SSH_KEY=$(read_state_var "$LOCAL_STATE" "SSH_KEY")
         USERNAME=$(read_state_var "$LOCAL_STATE" "USERNAME")
-        success "Session vps-bootstrap detectee :"
+        success "$MSG_STATUS_SESSION_FOUND"
         echo ""
-        echo "    Serveur  : $VPS_IP"
-        echo "    Cle SSH  : $(basename "$SSH_KEY")"
-        echo "    User     : $USERNAME"
+        echo "    $(printf "$MSG_STATUS_SESSION_IP" "$VPS_IP")"
+        echo "    $(printf "$MSG_STATUS_SESSION_KEY" "$(basename "$SSH_KEY")")"
+        echo "    $(printf "$MSG_STATUS_SESSION_USER" "$USERNAME")"
         echo ""
-        read -p "  C'est bien votre serveur ? (o/N) : " USE_SESSION
-        if [[ "$USE_SESSION" != "o" && "$USE_SESSION" != "O" ]]; then
+        read -p "$MSG_STATUS_SESSION_CONFIRM" USE_SESSION
+        if [[ "$USE_SESSION" != "o" && "$USE_SESSION" != "O" && "$USE_SESSION" != "y" && "$USE_SESSION" != "Y" ]]; then
             VPS_IP=""
             SSH_KEY=""
             USERNAME=""
         fi
     else
-        info "Aucune session vps-bootstrap trouvee."
-        echo "  Lancez d'abord setup.sh pour configurer votre VPS."
+        info "$MSG_STATUS_NO_SESSION"
+        echo "$MSG_STATUS_RUN_SETUP"
         echo ""
     fi
 
     if [ -z "$VPS_IP" ]; then
-        read -p "  Adresse IP du VPS : " VPS_IP
+        read -p "$MSG_STATUS_PROMPT_IP" VPS_IP
     fi
     if [ -z "$SSH_KEY" ]; then
-        read -p "  Chemin de la cle SSH (ex: ~/.ssh/id_ed25519) : " SSH_KEY
+        read -p "$MSG_STATUS_PROMPT_KEY" SSH_KEY
     fi
     if [ -z "$USERNAME" ]; then
-        read -p "  Nom d'utilisateur sur le VPS (defaut: deploy) : " USERNAME
+        read -p "$MSG_STATUS_PROMPT_USER" USERNAME
         USERNAME=${USERNAME:-deploy}
     fi
 fi
@@ -133,15 +139,15 @@ fi
 ERRORS=0
 
 if [ -z "$VPS_IP" ]; then
-    err "Adresse IP requise."
+    err "$MSG_STATUS_ERR_IP_REQUIRED"
     ERRORS=$((ERRORS + 1))
 fi
 if [ -z "$SSH_KEY" ] || [ ! -f "$SSH_KEY" ]; then
-    err "Cle SSH introuvable : ${SSH_KEY:-non specifiee}"
+    err "$(printf "$MSG_STATUS_ERR_KEY_NOT_FOUND" "${SSH_KEY:-N/A}")"
     ERRORS=$((ERRORS + 1))
 fi
 if [ -z "$USERNAME" ]; then
-    err "Nom d'utilisateur requis."
+    err "$MSG_STATUS_ERR_USER_REQUIRED"
     ERRORS=$((ERRORS + 1))
 fi
 
@@ -151,17 +157,17 @@ fi
 
 # --- Validation IP ---
 if ! echo "$VPS_IP" | grep -qE '^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$'; then
-    err "Adresse IP invalide : $VPS_IP"
-    echo "  L'adresse doit etre au format : 123.45.67.89"
+    err "$(printf "$MSG_STATUS_ERR_IP_INVALID" "$VPS_IP")"
+    echo "$MSG_STATUS_ERR_IP_FORMAT"
     exit 1
 fi
 
 # --- Test connexion SSH ---
-info "Connexion au serveur..."
+info "$MSG_STATUS_CONNECTING"
 if ! ssh -i "$SSH_KEY" -o ConnectTimeout=10 -o BatchMode=yes "${USERNAME}@${VPS_IP}" "echo ok" &>/dev/null; then
-    err "Impossible de se connecter a ${USERNAME}@${VPS_IP}"
+    err "$(printf "$MSG_STATUS_ERR_CONNECT" "$USERNAME" "$VPS_IP")"
     echo ""
-    echo "  Verifiez l'IP, la cle SSH et le nom d'utilisateur."
+    echo "$MSG_STATUS_ERR_CONNECT_HINT"
     exit 1
 fi
 
@@ -223,12 +229,12 @@ echo "========================================="
 echo -e "  ${BOLD}VPS STATUS${NC} - $SERVER_IP"
 echo "========================================="
 echo ""
-echo "  Serveur :"
+echo "$RMSG_STATUS_SERVER_SECTION"
 echo "    OS       : $OS_STR"
 echo "    Uptime   : $UPTIME_STR"
-echo "    CPU      : ${CPU_USAGE}% (${CPU_CORES} coeurs)"
+echo "$(printf "$RMSG_STATUS_CPU_LABEL" "$CPU_USAGE" "$CPU_CORES")"
 echo "    RAM      : $RAM_USED / $RAM_TOTAL (${RAM_PCT}%)"
-echo "    Disque   : $DISK_USED / $DISK_TOTAL (${DISK_PCT}%)"
+echo "$(printf "$RMSG_STATUS_DISK_LABEL" "$DISK_USED" "$DISK_TOTAL" "$DISK_PCT")"
 
 # --- Applications ---
 APPS_DIR="/home/$USERNAME/apps"
@@ -243,7 +249,7 @@ if [ -d "$APPS_DIR" ]; then
         APP_COUNT=$((APP_COUNT + 1))
 
         # Status Docker
-        APP_STATUS="Inconnu"
+        APP_STATUS="$RMSG_STATUS_APP_STATUS_UNKNOWN"
         APP_TYPE=""
         COMPOSE_FOUND=""
         for f in docker-compose.yml docker-compose.yaml compose.yml compose.yaml; do
@@ -258,21 +264,21 @@ if [ -d "$APPS_DIR" ]; then
             RUNNING=$(cd "$APP_PATH" && docker compose ps --format '{{.State}}' 2>/dev/null | grep -c "running" || echo "0")
             TOTAL=$(cd "$APP_PATH" && docker compose ps --format '{{.State}}' 2>/dev/null | grep -c '.' || echo "0")
             if [ "$RUNNING" -gt 0 ] 2>/dev/null; then
-                APP_STATUS="En cours ($RUNNING/$TOTAL conteneurs)"
+                APP_STATUS="$(printf "$RMSG_STATUS_APP_STATUS_RUNNING" "$RUNNING" "$TOTAL")"
                 DOCKER_RUNNING=$((DOCKER_RUNNING + RUNNING))
                 STOPPED=$((TOTAL - RUNNING))
                 DOCKER_STOPPED=$((DOCKER_STOPPED + STOPPED))
             else
-                APP_STATUS="Arrete"
+                APP_STATUS="$RMSG_STATUS_APP_STATUS_STOPPED"
                 DOCKER_STOPPED=$((DOCKER_STOPPED + TOTAL))
             fi
         elif [ -f "$APP_PATH/Dockerfile" ]; then
             APP_TYPE="dockerfile"
             if docker ps --format '{{.Names}}' 2>/dev/null | grep -q "^${APP}$"; then
-                APP_STATUS="En cours"
+                APP_STATUS="$RMSG_STATUS_APP_STATUS_RUNNING_SIMPLE"
                 DOCKER_RUNNING=$((DOCKER_RUNNING + 1))
             else
-                APP_STATUS="Arrete"
+                APP_STATUS="$RMSG_STATUS_APP_STATUS_STOPPED"
                 if docker ps -a --format '{{.Names}}' 2>/dev/null | grep -q "^${APP}$"; then
                     DOCKER_STOPPED=$((DOCKER_STOPPED + 1))
                 fi
@@ -308,24 +314,24 @@ if [ -d "$APPS_DIR" ]; then
         echo ""
         echo "  -----------------------------------------"
         echo -e "  ${BOLD}$APP${NC}"
-        if echo "$APP_STATUS" | grep -q "En cours"; then
+        if echo "$APP_STATUS" | grep -q "$RMSG_STATUS_APP_STATUS_RUNNING_SIMPLE"; then
             echo -e "    Status  : ${GREEN}$APP_STATUS${NC}"
         else
             echo -e "    Status  : ${RED}$APP_STATUS${NC}"
         fi
         [ -n "$APP_TYPE" ] && echo "    Type    : $APP_TYPE"
-        [ -n "$APP_DOMAIN" ] && echo "    Domaine : $APP_DOMAIN"
-        [ -n "$APP_PORT" ] && echo "    Port    : $APP_PORT"
-        echo "    Dossier : $APP_PATH"
+        [ -n "$APP_DOMAIN" ] && echo "$(printf "$RMSG_STATUS_DOMAIN_LABEL" "$APP_DOMAIN")"
+        [ -n "$APP_PORT" ] && echo "$(printf "$RMSG_STATUS_PORT_LABEL" "$APP_PORT")"
+        echo "$(printf "$RMSG_STATUS_DIR_LABEL" "$APP_PATH")"
         [ -n "$LAST_COMMIT" ] && echo "    Commit  : $LAST_COMMIT"
     done
 fi
 
 if [ "$APP_COUNT" -eq 0 ]; then
     echo ""
-    echo "  Applications :"
-    echo "    Aucune application deployee."
-    echo "    Utilisez deploy.sh pour deployer votre premiere app."
+    echo "$RMSG_STATUS_NO_APPS_SECTION"
+    echo "$RMSG_STATUS_NO_APPS"
+    echo "$RMSG_STATUS_NO_APPS_HINT"
 fi
 
 # --- Resume Docker ---
@@ -333,13 +339,19 @@ echo ""
 echo "  -----------------------------------------"
 TOTAL_DOCKER=$((DOCKER_RUNNING + DOCKER_STOPPED))
 if command -v docker &>/dev/null; then
-    echo "  Docker : $DOCKER_RUNNING conteneur(s) actif(s), $DOCKER_STOPPED arrete(s)"
+    printf "$RMSG_STATUS_DOCKER_SUMMARY\n" "$DOCKER_RUNNING" "$DOCKER_STOPPED"
 else
-    echo -e "  Docker : ${RED}non installe${NC}"
+    echo -e "${RED}${RMSG_STATUS_DOCKER_NOT_INSTALLED}${NC}"
 fi
 echo "========================================="
 echo ""
 STATUS_EOF
+
+# =========================================
+# INJECTION DES MESSAGES DE LANGUE
+# =========================================
+
+inject_lang_into_remote "$TMPSCRIPT"
 
 # =========================================
 # REMPLACEMENT DES PLACEHOLDERS
@@ -356,9 +368,9 @@ fi
 # ENVOI ET EXECUTION
 # =========================================
 
-info "Envoi du script de status..."
+info "$MSG_STATUS_SENDING"
 if ! scp -i "$SSH_KEY" "$TMPSCRIPT" "${USERNAME}@${VPS_IP}:/tmp/vps-status-remote.sh"; then
-    err "Impossible d'envoyer le script sur le serveur."
+    err "$MSG_STATUS_ERR_SEND"
     rm -f "$TMPSCRIPT"
     exit 1
 fi

@@ -55,6 +55,12 @@ detect_os() {
 
 detect_os
 
+# --- Chargement de la langue ---
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)"
+if [ -f "${SCRIPT_DIR}/lang.sh" ]; then
+    . "${SCRIPT_DIR}/lang.sh"
+fi
+
 # =========================================
 # ARGUMENTS (MODE CI/CD)
 # =========================================
@@ -78,17 +84,17 @@ while [ $# -gt 0 ]; do
         --restore)
             RESTORE=true
             if [ $# -lt 2 ] || [[ "$2" == -* ]]; then
-                err "L'option --restore necessite un fichier en argument."
-                echo "  Usage : --restore fichier.tar.gz"
+                err "$MSG_BACKUP_ERR_RESTORE_NO_FILE"
+                echo "$MSG_BACKUP_ERR_RESTORE_USAGE"
                 exit 1
             fi
             RESTORE_FILE="$2"
             shift 2
             ;;
         *)
-            err "Argument inconnu : $1"
-            echo "  Usage : bash backup.sh -ip IP -key CLE -user USER [-app NOM] [-dest /chemin]"
-            echo "  Restore : bash backup.sh -ip IP -key CLE -user USER -app NOM --restore fichier.tar.gz"
+            err "$(printf "$MSG_BACKUP_UNKNOWN_ARG" "$1")"
+            echo "$MSG_BACKUP_USAGE"
+            echo "$MSG_BACKUP_USAGE_RESTORE"
             exit 1
             ;;
     esac
@@ -103,7 +109,7 @@ if [ "$INTERACTIVE" = true ]; then
     echo ""
     echo "========================================="
     echo -e "  ${BOLD}VPS BACKUP${NC}"
-    echo "  Sauvegarde et restauration de vos apps"
+    echo "  $MSG_BACKUP_HEADER"
     echo "========================================="
     echo ""
 
@@ -114,75 +120,75 @@ if [ "$INTERACTIVE" = true ]; then
         VPS_IP=$(read_state_var "$LOCAL_STATE" "VPS_IP")
         SSH_KEY=$(read_state_var "$LOCAL_STATE" "SSH_KEY")
         USERNAME=$(read_state_var "$LOCAL_STATE" "USERNAME")
-        success "Session vps-bootstrap detectee :"
+        success "$MSG_BACKUP_SESSION_FOUND"
         echo ""
-        echo "    Serveur  : $VPS_IP"
-        echo "    Cle SSH  : $(basename "$SSH_KEY")"
-        echo "    User     : $USERNAME"
+        echo "    $(printf "$MSG_BACKUP_SESSION_IP" "$VPS_IP")"
+        echo "    $(printf "$MSG_BACKUP_SESSION_KEY" "$(basename "$SSH_KEY")")"
+        echo "    $(printf "$MSG_BACKUP_SESSION_USER" "$USERNAME")"
         echo ""
-        read -p "  C'est bien votre serveur ? (o/N) : " USE_SESSION
-        if [[ "$USE_SESSION" != "o" && "$USE_SESSION" != "O" ]]; then
+        read -p "  $MSG_BACKUP_SESSION_CONFIRM" USE_SESSION
+        if [[ ! "$USE_SESSION" =~ ^[$LANG_YES_CHARS]$ ]]; then
             VPS_IP=""
             SSH_KEY=""
             USERNAME=""
         fi
     else
-        info "Aucune session vps-bootstrap trouvee."
-        echo "  Lancez d'abord setup.sh pour configurer votre VPS."
+        info "$MSG_BACKUP_NO_SESSION"
+        echo "$MSG_BACKUP_RUN_SETUP"
         echo ""
     fi
 
     if [ -z "$VPS_IP" ]; then
-        read -p "  Adresse IP du VPS : " VPS_IP
+        read -p "$MSG_BACKUP_PROMPT_IP" VPS_IP
     fi
     if [ -z "$SSH_KEY" ]; then
-        read -p "  Chemin de la cle SSH (ex: ~/.ssh/id_ed25519) : " SSH_KEY
+        read -p "$MSG_BACKUP_PROMPT_KEY" SSH_KEY
     fi
     if [ -z "$USERNAME" ]; then
-        read -p "  Nom d'utilisateur sur le VPS (defaut: deploy) : " USERNAME
+        read -p "$MSG_BACKUP_PROMPT_USER" USERNAME
         USERNAME=${USERNAME:-deploy}
     fi
 
     echo ""
 
     # Choix : sauvegarder ou restaurer
-    echo -e "${BOLD}${YELLOW}[>] Que souhaitez-vous faire ?${NC}"
+    echo -e "${BOLD}${YELLOW}$MSG_BACKUP_ACTION_PROMPT${NC}"
     echo ""
-    echo "    1) Sauvegarder une ou toutes les applications"
-    echo "    2) Restaurer une application depuis un fichier de sauvegarde"
+    echo "$MSG_BACKUP_ACTION_SAVE"
+    echo "$MSG_BACKUP_ACTION_RESTORE"
     echo ""
-    read -p "  Votre choix (1/2) : " BACKUP_CHOICE
+    read -p "$MSG_BACKUP_ACTION_CHOICE" BACKUP_CHOICE
     echo ""
 
     if [ "$BACKUP_CHOICE" = "2" ]; then
         RESTORE=true
 
         # Demander le fichier de sauvegarde
-        echo "  Indiquez le chemin du fichier de sauvegarde (.tar.gz)."
-        echo "  Vous pouvez glisser-deposer le fichier dans le terminal."
+        echo "$MSG_BACKUP_RESTORE_HINT_1"
+        echo "$MSG_BACKUP_RESTORE_HINT_2"
         echo ""
-        read -p "  Fichier de sauvegarde : " RESTORE_FILE
+        read -p "$MSG_BACKUP_RESTORE_PROMPT_FILE" RESTORE_FILE
         RESTORE_FILE=$(echo "$RESTORE_FILE" | sed "s|^['\"]||;s|['\"]$||;s|^~|$HOME|;s|\\\\ | |g;s|[[:space:]]*$||")
 
         if [ ! -f "$RESTORE_FILE" ]; then
-            err "Fichier introuvable : $RESTORE_FILE"
+            err "$(printf "$MSG_BACKUP_ERR_FILE_NOT_FOUND" "$RESTORE_FILE")"
             exit 1
         fi
 
         # Demander le nom de l'app
-        read -p "  Nom de l'application a restaurer : " APP_NAME
+        read -p "$MSG_BACKUP_RESTORE_PROMPT_APP" APP_NAME
     else
         # Lister les apps et proposer le choix
-        info "Recuperation des applications deployees..."
+        info "$MSG_BACKUP_FETCHING_APPS"
         APPS_LIST=$(ssh -i "$SSH_KEY" -o ConnectTimeout=10 -o BatchMode=yes "${USERNAME}@${VPS_IP}" "ls -1 ~/apps/ 2>/dev/null" || true)
 
         if [ -z "$APPS_LIST" ]; then
-            err "Aucune application deployee sur ce serveur."
+            err "$MSG_BACKUP_ERR_NO_APPS"
             exit 1
         fi
 
         echo ""
-        echo "  Applications deployees :"
+        echo "$MSG_BACKUP_APPS_DEPLOYED"
         echo ""
         INDEX=1
         while IFS= read -r app; do
@@ -190,12 +196,12 @@ if [ "$INTERACTIVE" = true ]; then
             INDEX=$((INDEX + 1))
         done <<< "$APPS_LIST"
         echo ""
-        echo "    $INDEX) Toutes les applications"
+        echo "$(printf "$MSG_BACKUP_APP_ALL" "$INDEX")"
         echo ""
-        read -p "  Quelle application sauvegarder ? : " APP_CHOICE
+        read -p "$MSG_BACKUP_PROMPT_APP_CHOICE" APP_CHOICE
 
         if ! [[ "$APP_CHOICE" =~ ^[0-9]+$ ]]; then
-            err "Choix invalide : entrez un numero."
+            err "$MSG_BACKUP_ERR_INVALID_CHOICE"
             exit 1
         fi
 
@@ -204,14 +210,14 @@ if [ "$INTERACTIVE" = true ]; then
         else
             APP_NAME=$(echo "$APPS_LIST" | sed -n "${APP_CHOICE}p")
             if [ -z "$APP_NAME" ]; then
-                err "Choix invalide."
+                err "$MSG_BACKUP_ERR_INVALID_CHOICE_SIMPLE"
                 exit 1
             fi
         fi
 
         # Dossier de destination
         echo ""
-        read -p "  Dossier de destination (defaut: dossier courant) : " DEST_INPUT
+        read -p "$MSG_BACKUP_PROMPT_DEST" DEST_INPUT
         DEST_DIR=${DEST_INPUT:-.}
     fi
 fi
@@ -223,24 +229,24 @@ fi
 ERRORS=0
 
 if [ -z "$VPS_IP" ]; then
-    err "Adresse IP requise."
+    err "$MSG_BACKUP_ERR_IP_REQUIRED"
     ERRORS=$((ERRORS + 1))
 fi
 if [ -z "$SSH_KEY" ] || [ ! -f "$SSH_KEY" ]; then
-    err "Cle SSH introuvable : ${SSH_KEY:-non specifiee}"
+    err "$(printf "$MSG_BACKUP_ERR_KEY_NOT_FOUND" "${SSH_KEY:-$MSG_BACKUP_FALLBACK_UNSPECIFIED}")"
     ERRORS=$((ERRORS + 1))
 fi
 if [ -z "$USERNAME" ]; then
-    err "Nom d'utilisateur requis."
+    err "$MSG_BACKUP_ERR_USER_REQUIRED"
     ERRORS=$((ERRORS + 1))
 fi
 if [ "$RESTORE" = true ]; then
     if [ -z "$APP_NAME" ]; then
-        err "Nom de l'application requis pour la restauration."
+        err "$MSG_BACKUP_ERR_APP_REQUIRED_RESTORE"
         ERRORS=$((ERRORS + 1))
     fi
     if [ -z "$RESTORE_FILE" ] || [ ! -f "$RESTORE_FILE" ]; then
-        err "Fichier de sauvegarde introuvable : ${RESTORE_FILE:-non specifie}"
+        err "$(printf "$MSG_BACKUP_ERR_RESTORE_FILE_NOT_FOUND" "${RESTORE_FILE:-non specifie}")"
         ERRORS=$((ERRORS + 1))
     fi
 fi
@@ -251,29 +257,29 @@ fi
 
 # --- Validation IP ---
 if ! echo "$VPS_IP" | grep -qE '^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$'; then
-    err "Adresse IP invalide : $VPS_IP"
-    echo "  L'adresse doit etre au format : 123.45.67.89"
+    err "$(printf "$MSG_BACKUP_ERR_IP_INVALID" "$VPS_IP")"
+    echo "$MSG_BACKUP_ERR_IP_FORMAT"
     exit 1
 fi
 
 # --- Test connexion SSH ---
-info "Connexion au serveur..."
+info "$MSG_BACKUP_CONNECTING"
 if ! ssh -i "$SSH_KEY" -o ConnectTimeout=10 -o BatchMode=yes "${USERNAME}@${VPS_IP}" "echo ok" &>/dev/null; then
-    err "Impossible de se connecter a ${USERNAME}@${VPS_IP}"
+    err "$(printf "$MSG_BACKUP_ERR_CONNECT" "$USERNAME" "$VPS_IP")"
     echo ""
-    echo "  Verifiez l'IP, la cle SSH et le nom d'utilisateur."
+    echo "$MSG_BACKUP_ERR_CONNECT_HINT"
     exit 1
 fi
-success "Connexion SSH verifiee."
+success "$MSG_BACKUP_SSH_OK"
 
 # =========================================
 # MODE RESTAURATION
 # =========================================
 
 if [ "$RESTORE" = true ]; then
-    info "Envoi du fichier de sauvegarde sur le serveur..."
+    info "$MSG_BACKUP_RESTORE_SENDING_FILE"
     scp -i "$SSH_KEY" "$RESTORE_FILE" "${USERNAME}@${VPS_IP}:/tmp/vps-restore.tar.gz"
-    success "Fichier envoye."
+    success "$MSG_BACKUP_RESTORE_FILE_SENT"
 
     TMPSCRIPT=$(mktemp)
     trap 'rm -f "$TMPSCRIPT"' EXIT
@@ -300,7 +306,7 @@ err()     { echo -e "${RED}[ERR] $1${NC}"; }
 
 echo ""
 echo "========================================="
-echo -e "  ${BOLD}RESTAURATION : $APP_NAME${NC}"
+echo -e "  ${BOLD}$(printf "$RMSG_RESTORE_HEADER" "$APP_NAME")${NC}"
 echo "========================================="
 echo ""
 
@@ -318,7 +324,7 @@ if [ -f "$RESTORE_TMP/env" ]; then
     cp "$RESTORE_TMP/env" "$APP_DIR/.env"
     chown "$USERNAME:$USERNAME" "$APP_DIR/.env"
     chmod 600 "$APP_DIR/.env"
-    success "Fichier .env restaure."
+    success "$RMSG_RESTORE_ENV_OK"
 fi
 
 # Restaurer les metadonnees
@@ -337,12 +343,12 @@ if [ -f "$RESTORE_TMP/Caddyfile" ]; then
     if command -v caddy &>/dev/null; then
         if caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile 2>/dev/null; then
             systemctl reload caddy 2>/dev/null || true
-            success "Caddyfile restaure et recharge."
+            success "$RMSG_RESTORE_CADDYFILE_OK"
         else
-            warn "Caddyfile restaure mais la validation a echoue."
+            warn "$RMSG_RESTORE_CADDYFILE_WARN"
         fi
     else
-        success "Caddyfile restaure."
+        success "$RMSG_RESTORE_CADDYFILE_NO_CADDY"
     fi
 fi
 
@@ -350,14 +356,14 @@ fi
 for VOL_ARCHIVE in "$RESTORE_TMP"/volume-*.tar.gz; do
     [ -f "$VOL_ARCHIVE" ] || continue
     VOL_NAME=$(basename "$VOL_ARCHIVE" .tar.gz | sed 's/^volume-//')
-    info "Restauration du volume Docker : $VOL_NAME"
+    info "$(printf "$RMSG_RESTORE_VOLUME_RESTORING" "$VOL_NAME")"
 
     # Creer le volume s'il n'existe pas
     docker volume create "$VOL_NAME" 2>/dev/null || true
 
     # Restaurer les donnees
     docker run --rm -v "$VOL_NAME":/data -v "$RESTORE_TMP":/backup alpine sh -c "cd /data && tar xzf /backup/$(basename "$VOL_ARCHIVE") --strip-components=1 2>/dev/null || tar xzf /backup/$(basename "$VOL_ARCHIVE") 2>/dev/null"
-    success "Volume $VOL_NAME restaure."
+    success "$(printf "$RMSG_RESTORE_VOLUME_OK" "$VOL_NAME")"
 done
 
 # Relancer les conteneurs si possible
@@ -372,9 +378,9 @@ if [ -d "$APP_DIR" ]; then
     done
 
     if [ -n "$COMPOSE_FILE" ]; then
-        info "Relancement de l'application..."
+        info "$RMSG_RESTORE_APP_STARTING"
         sudo -u "$USERNAME" docker compose up -d --build 2>&1 || true
-        success "Application relancee."
+        success "$RMSG_RESTORE_APP_STARTED"
     fi
 fi
 
@@ -383,13 +389,15 @@ rm -rf "$RESTORE_TMP"
 
 echo ""
 echo "========================================="
-echo -e "  ${GREEN}RESTAURATION TERMINEE !${NC}"
+echo -e "  ${GREEN}$RMSG_RESTORE_DONE${NC}"
 echo "========================================="
 echo ""
-echo "  Application : $APP_NAME"
-echo "  Dossier     : $APP_DIR"
+echo "$(printf "$RMSG_RESTORE_DONE_APP" "$APP_NAME")"
+echo "$(printf "$RMSG_RESTORE_DONE_DIR" "$APP_DIR")"
 echo "========================================="
 RESTORE_EOF
+
+    inject_lang_into_remote "$TMPSCRIPT"
 
     SAFE_APP=$(sed_escape "$APP_NAME")
     SAFE_USER=$(sed_escape "$USERNAME")
@@ -413,7 +421,7 @@ RESTORE_EOF
     ssh $SSH_TTY_FLAG -i "$SSH_KEY" "${USERNAME}@${VPS_IP}" "chmod 700 /tmp/vps-restore-remote.sh; sudo bash /tmp/vps-restore-remote.sh; rm -f /tmp/vps-restore-remote.sh"
 
     echo ""
-    echo -e "${BOLD}=== RESTAURATION TERMINEE ===${NC}"
+    echo -e "${BOLD}$MSG_BACKUP_RESTORE_DONE${NC}"
     echo ""
     exit 0
 fi
@@ -452,10 +460,10 @@ backup_app() {
     local WORK="/tmp/vps-backup-$APP"
 
     echo ""
-    echo -e "${BOLD}[>] Sauvegarde : $APP${NC}"
+    echo -e "${BOLD}$(printf "$RMSG_BACKUP_APP_START" "$APP")${NC}"
 
     if [ ! -d "$APP_PATH" ]; then
-        warn "Application introuvable : $APP_PATH"
+        warn "$(printf "$RMSG_BACKUP_ERR_APP_NOT_FOUND" "$APP_PATH")"
         return
     fi
 
@@ -465,7 +473,7 @@ backup_app() {
     # Fichier .env
     if [ -f "$APP_PATH/.env" ]; then
         cp "$APP_PATH/.env" "$WORK/env"
-        success "  .env sauvegarde"
+        success "$RMSG_BACKUP_ENV_SAVED"
     fi
 
     # Metadonnees
@@ -495,12 +503,12 @@ backup_app() {
     "commit": "$COMMIT"
 }
 META_BLOCK
-    success "  Metadonnees sauvegardees"
+    success "$RMSG_BACKUP_METADATA_SAVED"
 
     # Caddyfile
     if [ -f /etc/caddy/Caddyfile ]; then
         cp /etc/caddy/Caddyfile "$WORK/Caddyfile"
-        success "  Caddyfile sauvegarde"
+        success "$RMSG_BACKUP_CADDYFILE_SAVED"
     fi
 
     # Volumes Docker
@@ -523,13 +531,13 @@ META_BLOCK
                 FULL_VOL="${PROJECT_NAME}_${vol}"
                 # Verifier que le volume existe
                 if docker volume inspect "$FULL_VOL" &>/dev/null; then
-                    info "  Sauvegarde du volume : $FULL_VOL"
+                    info "$(printf "$RMSG_BACKUP_VOLUME_SAVING" "$FULL_VOL")"
                     docker run --rm -v "$FULL_VOL":/data -v "$WORK":/backup alpine tar czf "/backup/volume-${FULL_VOL}.tar.gz" /data 2>/dev/null
-                    success "  Volume $FULL_VOL sauvegarde"
+                    success "$(printf "$RMSG_BACKUP_VOLUME_SAVED" "$FULL_VOL")"
                 elif docker volume inspect "$vol" &>/dev/null; then
-                    info "  Sauvegarde du volume : $vol"
+                    info "$(printf "$RMSG_BACKUP_VOLUME_SAVING" "$vol")"
                     docker run --rm -v "$vol":/data -v "$WORK":/backup alpine tar czf "/backup/volume-${vol}.tar.gz" /data 2>/dev/null
-                    success "  Volume $vol sauvegarde"
+                    success "$(printf "$RMSG_BACKUP_VOLUME_SAVED" "$vol")"
                 fi
             done <<< "$VOLUMES"
         fi
@@ -540,7 +548,7 @@ META_BLOCK
     tar czf "/tmp/$ARCHIVE_NAME" -C "$WORK" .
     rm -rf "$WORK"
 
-    success "Archive creee : /tmp/$ARCHIVE_NAME"
+    success "$(printf "$RMSG_BACKUP_ARCHIVE_CREATED" "$ARCHIVE_NAME")"
     echo "$ARCHIVE_NAME" >> /tmp/vps-backup-files.txt
 }
 
@@ -549,7 +557,7 @@ rm -f /tmp/vps-backup-files.txt
 
 echo ""
 echo "========================================="
-echo -e "  ${BOLD}SAUVEGARDE VPS${NC}"
+echo -e "  ${BOLD}VPS BACKUP${NC}"
 echo "========================================="
 
 if [ -n "$APP_NAME" ]; then
@@ -565,7 +573,7 @@ fi
 
 if [ ! -f /tmp/vps-backup-files.txt ]; then
     echo ""
-    warn "Aucune application a sauvegarder."
+    warn "$RMSG_BACKUP_WARN_NOTHING"
     exit 0
 fi
 
@@ -577,16 +585,18 @@ chown "$USERNAME:$USERNAME" /tmp/vps-backup-files.txt 2>/dev/null || true
 
 echo ""
 echo "========================================="
-echo -e "  ${GREEN}SAUVEGARDE TERMINEE !${NC}"
+echo -e "  ${GREEN}$RMSG_BACKUP_DONE${NC}"
 echo "========================================="
 echo ""
-echo "  Fichiers crees :"
+echo "$RMSG_BACKUP_FILES_CREATED"
 while IFS= read -r f; do
     echo "    - $f"
 done < /tmp/vps-backup-files.txt
 echo ""
 echo "========================================="
 BACKUP_EOF
+
+inject_lang_into_remote "$TMPSCRIPT"
 
 # =========================================
 # REMPLACEMENT DES PLACEHOLDERS
@@ -606,9 +616,9 @@ fi
 # ENVOI ET EXECUTION
 # =========================================
 
-info "Envoi du script de sauvegarde..."
+info "$MSG_BACKUP_SENDING_SCRIPT"
 if ! scp -i "$SSH_KEY" "$TMPSCRIPT" "${USERNAME}@${VPS_IP}:/tmp/vps-backup-remote.sh"; then
-    err "Impossible d'envoyer le script sur le serveur."
+    err "$MSG_BACKUP_ERR_SEND"
     rm -f "$TMPSCRIPT"
     exit 1
 fi
@@ -628,7 +638,7 @@ ssh $SSH_TTY_FLAG -i "$SSH_KEY" "${USERNAME}@${VPS_IP}" "chmod 700 /tmp/vps-back
 # =========================================
 
 echo ""
-info "Recuperation des sauvegardes..."
+info "$MSG_BACKUP_RETRIEVING"
 
 mkdir -p "$DEST_DIR"
 
@@ -636,15 +646,15 @@ mkdir -p "$DEST_DIR"
 BACKUP_FILES=$(ssh -i "$SSH_KEY" -o BatchMode=yes "${USERNAME}@${VPS_IP}" "cat /tmp/vps-backup-files.txt 2>/dev/null" || true)
 
 if [ -z "$BACKUP_FILES" ]; then
-    warn "Aucun fichier de sauvegarde a recuperer."
+    warn "$MSG_BACKUP_WARN_NOTHING_TO_RETRIEVE"
     exit 0
 fi
 
 while IFS= read -r BACKUP_FILE; do
     [ -z "$BACKUP_FILE" ] && continue
-    info "Telechargement : $BACKUP_FILE"
+    info "$(printf "$MSG_BACKUP_DOWNLOADING" "$BACKUP_FILE")"
     scp -i "$SSH_KEY" "${USERNAME}@${VPS_IP}:/tmp/${BACKUP_FILE}" "${DEST_DIR}/${BACKUP_FILE}"
-    success "Sauvegarde recuperee : ${DEST_DIR}/${BACKUP_FILE}"
+    success "$(printf "$MSG_BACKUP_RETRIEVED" "${DEST_DIR}/${BACKUP_FILE}")"
 done <<< "$BACKUP_FILES"
 
 # Nettoyage sur le serveur
@@ -652,21 +662,20 @@ ssh -i "$SSH_KEY" -o BatchMode=yes "${USERNAME}@${VPS_IP}" "rm -f /tmp/vps-backu
 
 echo ""
 echo "========================================="
-echo -e "${BOLD}=== SAUVEGARDE TERMINEE ===${NC}"
+echo -e "${BOLD}$MSG_BACKUP_DONE_TITLE${NC}"
 echo "========================================="
 echo ""
-echo "  Fichiers sauvegardes dans : $DEST_DIR"
+echo "$(printf "$MSG_BACKUP_DEST_DIR" "$DEST_DIR")"
 echo ""
 while IFS= read -r BACKUP_FILE; do
     [ -z "$BACKUP_FILE" ] && continue
     echo "    - $BACKUP_FILE"
 done <<< "$BACKUP_FILES"
 echo ""
-echo "  Pour restaurer :"
+echo "$MSG_BACKUP_HOW_TO_RESTORE"
 echo ""
 if [ "$INTERACTIVE" = true ]; then
     echo -e "    ${GREEN}bash backup.sh${NC}"
-    echo "    (puis choisir 'Restaurer')"
 else
     FIRST_FILE=$(echo "$BACKUP_FILES" | head -1)
     echo -e "    ${GREEN}bash backup.sh -ip $VPS_IP -key $SSH_KEY -user $USERNAME -app NOM --restore $FIRST_FILE${NC}"
