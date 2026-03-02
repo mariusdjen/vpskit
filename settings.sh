@@ -58,6 +58,10 @@ detect_os
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)"
 if [ -f "${SCRIPT_DIR}/lang.sh" ]; then
     . "${SCRIPT_DIR}/lang.sh"
+else
+    _LANG_TMP=$(mktemp)
+    trap 'rm -f "$_LANG_TMP"' EXIT
+    curl -fsSL "https://raw.githubusercontent.com/mariusdjen/vpskit/main/lang.sh" -o "$_LANG_TMP" 2>/dev/null && . "$_LANG_TMP"
 fi
 
 # --- Chemins ---

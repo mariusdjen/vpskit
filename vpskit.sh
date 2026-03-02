@@ -28,6 +28,11 @@ REPO_BASE="https://raw.githubusercontent.com/mariusdjen/vpskit/main"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)"
 if [ -f "${SCRIPT_DIR}/lang.sh" ]; then
     . "${SCRIPT_DIR}/lang.sh"
+else
+    # Mode curl : telecharger lang.sh dans un fichier temp
+    _LANG_TMP=$(mktemp)
+    trap 'rm -f "$_LANG_TMP"' EXIT
+    curl -fsSL "${REPO_BASE}/lang.sh" -o "$_LANG_TMP" 2>/dev/null && . "$_LANG_TMP"
 fi
 
 # --- Banniere ---
