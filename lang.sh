@@ -45,7 +45,7 @@ choose_language() {
 save_lang_preference() {
     local code="$1"
     local settings_file
-    if [ "$OS" = "windows" ] 2>/dev/null; then
+    if [ "${OS:-}" = "windows" ]; then
         settings_file="$USERPROFILE/.ssh/.vpskit-settings"
     else
         settings_file="$HOME/.ssh/.vpskit-settings"
@@ -68,7 +68,7 @@ save_lang_preference() {
 load_lang() {
     local lang_code=""
     local settings_file
-    if [ "$OS" = "windows" ] 2>/dev/null; then
+    if [ "${OS:-}" = "windows" ]; then
         settings_file="$USERPROFILE/.ssh/.vpskit-settings"
     else
         settings_file="$HOME/.ssh/.vpskit-settings"
