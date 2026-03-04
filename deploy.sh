@@ -960,6 +960,12 @@ if [ -d "$APP_DIR/.git" ]; then
     fi
 fi
 
+# Si le dossier existe mais n'est pas un depot git, le supprimer
+if [ -d "$APP_DIR" ] && [ ! -d "$APP_DIR/.git" ]; then
+    warn "Le dossier $APP_DIR existe mais n'est pas un depot git, suppression..."
+    rm -rf "$APP_DIR"
+fi
+
 if [ -d "$APP_DIR/.git" ]; then
     info "$RMSG_DEPLOY_REPO_EXISTS"
     cd "$APP_DIR"
