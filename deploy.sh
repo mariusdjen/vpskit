@@ -109,6 +109,12 @@ while [ $# -gt 0 ]; do
     esac
 done
 
+# En CI/CD, accepter automatiquement les nouvelles cles SSH (known_hosts vide)
+SSH_STRICT_OPT=""
+if [ "$INTERACTIVE" = false ]; then
+    SSH_STRICT_OPT="-o StrictHostKeyChecking=accept-new"
+fi
+
 # Si les deux sont fournis, le tag a priorite
 if [ -n "$DEPLOY_TAG" ] && [ -n "$DEPLOY_BRANCH" ]; then
     warn "$MSG_DEPLOY_BRANCH_TAG_EXCLUSIVE"
@@ -196,7 +202,7 @@ if [ "$INTERACTIVE" = true ]; then
     # DERNIERS DEPLOIEMENTS
     # =========================================
 
-    DEPLOY_HISTORY=$(ssh -i "$SSH_KEY" -o ConnectTimeout=5 -o BatchMode=yes "${USERNAME}@${VPS_IP}" "tail -n 5 ~/.deploy-history 2>/dev/null" 2>/dev/null || true)
+    DEPLOY_HISTORY=$(ssh -i "$SSH_KEY" $SSH_STRICT_OPT -o ConnectTimeout=5 -o BatchMode=yes "${USERNAME}@${VPS_IP}" "tail -n 5 ~/.deploy-history 2>/dev/null" 2>/dev/null || true)
     if [ -n "$DEPLOY_HISTORY" ]; then
         info "$MSG_DEPLOY_LAST_DEPLOYS"
         echo ""
@@ -223,7 +229,7 @@ if [ "$INTERACTIVE" = true ]; then
 
         # Lister les apps existantes sur le serveur
         info "$MSG_DEPLOY_ROLLBACK_FETCHING"
-        APPS_LIST=$(ssh -i "$SSH_KEY" -o ConnectTimeout=10 -o BatchMode=yes "${USERNAME}@${VPS_IP}" "ls -1 ~/apps/ 2>/dev/null" || true)
+        APPS_LIST=$(ssh -i "$SSH_KEY" $SSH_STRICT_OPT -o ConnectTimeout=10 -o BatchMode=yes "${USERNAME}@${VPS_IP}" "ls -1 ~/apps/ 2>/dev/null" || true)
 
         if [ -z "$APPS_LIST" ]; then
             err "$MSG_DEPLOY_ROLLBACK_NO_APPS"
@@ -255,7 +261,7 @@ if [ "$INTERACTIVE" = true ]; then
         success "$(printf "$MSG_DEPLOY_ROLLBACK_APP_SELECTED" "$APP_NAME")"
 
         # Vérifier qu'un commit précédent existe
-        HAS_PREVIOUS=$(ssh -i "$SSH_KEY" -o ConnectTimeout=10 -o BatchMode=yes "${USERNAME}@${VPS_IP}" "cat ~/apps/${APP_NAME}/.last-working-commit 2>/dev/null" || true)
+        HAS_PREVIOUS=$(ssh -i "$SSH_KEY" $SSH_STRICT_OPT -o ConnectTimeout=10 -o BatchMode=yes "${USERNAME}@${VPS_IP}" "cat ~/apps/${APP_NAME}/.last-working-commit 2>/dev/null" || true)
         if [ -z "$HAS_PREVIOUS" ]; then
             err "$(printf "$MSG_DEPLOY_ROLLBACK_NO_PREVIOUS" "$APP_NAME")"
             echo "$MSG_DEPLOY_ROLLBACK_NEED_UPDATE"
@@ -532,7 +538,7 @@ fi
 
 # --- Test connexion SSH ---
 info "$MSG_DEPLOY_SSH_TESTING"
-if ! ssh -i "$SSH_KEY" -o ConnectTimeout=10 -o BatchMode=yes "${USERNAME}@${VPS_IP}" "echo ok" &>/dev/null; then
+if ! ssh -i "$SSH_KEY" $SSH_STRICT_OPT -o ConnectTimeout=10 -o BatchMode=yes "${USERNAME}@${VPS_IP}" "echo ok" &>/dev/null; then
     err "$(printf "$MSG_DEPLOY_SSH_FAILED" "$USERNAME" "$VPS_IP")"
     echo ""
     echo "$MSG_DEPLOY_SSH_FAILED_CAUSES_TITLE"
@@ -683,8 +689,8 @@ ROLLBACK_EOF
     fi
 
     info "$MSG_DEPLOY_ROLLBACK_SENDING"
-    REMOTE_TMP=$(ssh -i "$SSH_KEY" -o BatchMode=yes "${USERNAME}@${VPS_IP}" "mktemp /tmp/vps-XXXXXXXXXX.sh")
-    scp -i "$SSH_KEY" "$TMPSCRIPT" "${USERNAME}@${VPS_IP}:${REMOTE_TMP}"
+    REMOTE_TMP=$(ssh -i "$SSH_KEY" $SSH_STRICT_OPT -o BatchMode=yes "${USERNAME}@${VPS_IP}" "mktemp /tmp/vps-XXXXXXXXXX.sh")
+    scp -i "$SSH_KEY" $SSH_STRICT_OPT "$TMPSCRIPT" "${USERNAME}@${VPS_IP}:${REMOTE_TMP}"
     rm -f "$TMPSCRIPT"
 
     if [ -t 0 ]; then
@@ -693,7 +699,7 @@ ROLLBACK_EOF
         SSH_TTY_FLAG=""
     fi
 
-    ssh $SSH_TTY_FLAG -i "$SSH_KEY" "${USERNAME}@${VPS_IP}" "chmod 700 '${REMOTE_TMP}'; sudo bash '${REMOTE_TMP}'; rm -f '${REMOTE_TMP}'"
+    ssh $SSH_TTY_FLAG $SSH_STRICT_OPT -i "$SSH_KEY" "${USERNAME}@${VPS_IP}" "chmod 700 '${REMOTE_TMP}'; sudo bash '${REMOTE_TMP}'; rm -f '${REMOTE_TMP}'"
 
     echo ""
     echo -e "${BOLD}$MSG_DEPLOY_ROLLBACK_DONE_TITLE${NC}"
@@ -1459,7 +1465,7 @@ fi
 # Envoyer le fichier .env si nécessaire
 if [ -n "$ENV_FILE" ]; then
     info "$MSG_DEPLOY_ENV_SENDING"
-    if ! scp -i "$SSH_KEY" "$ENV_FILE" "${USERNAME}@${VPS_IP}:/tmp/.env-${APP_NAME}"; then
+    if ! scp -i "$SSH_KEY" $SSH_STRICT_OPT "$ENV_FILE" "${USERNAME}@${VPS_IP}:/tmp/.env-${APP_NAME}"; then
         err "$MSG_DEPLOY_ENV_SEND_FAILED"
         rm -f "$TMPSCRIPT"
         exit 1
@@ -1469,8 +1475,8 @@ fi
 
 # Envoyer et exécuter le script distant
 info "$MSG_DEPLOY_SCRIPT_SENDING"
-REMOTE_TMP=$(ssh -i "$SSH_KEY" -o BatchMode=yes "${USERNAME}@${VPS_IP}" "mktemp /tmp/vps-XXXXXXXXXX.sh")
-if ! scp -i "$SSH_KEY" "$TMPSCRIPT" "${USERNAME}@${VPS_IP}:${REMOTE_TMP}"; then
+REMOTE_TMP=$(ssh -i "$SSH_KEY" $SSH_STRICT_OPT -o BatchMode=yes "${USERNAME}@${VPS_IP}" "mktemp /tmp/vps-XXXXXXXXXX.sh")
+if ! scp -i "$SSH_KEY" $SSH_STRICT_OPT "$TMPSCRIPT" "${USERNAME}@${VPS_IP}:${REMOTE_TMP}"; then
     err "$MSG_DEPLOY_SCRIPT_SEND_FAILED"
     rm -f "$TMPSCRIPT"
     exit 1
@@ -1486,7 +1492,7 @@ else
     SSH_TTY_FLAG=""
 fi
 
-ssh $SSH_TTY_FLAG -i "$SSH_KEY" "${USERNAME}@${VPS_IP}" "chmod 700 '${REMOTE_TMP}'; sudo bash '${REMOTE_TMP}'; rm -f '${REMOTE_TMP}'"
+ssh $SSH_TTY_FLAG $SSH_STRICT_OPT -i "$SSH_KEY" "${USERNAME}@${VPS_IP}" "chmod 700 '${REMOTE_TMP}'; sudo bash '${REMOTE_TMP}'; rm -f '${REMOTE_TMP}'"
 
 # =========================================
 # RÉSUMÉ LOCAL

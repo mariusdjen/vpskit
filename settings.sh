@@ -629,8 +629,11 @@ jobs:
       - name: Setup SSH key
         run: |
           mkdir -p ~/.ssh
-          echo "\${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/deploy_key
+          printf '%s\n' "\${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -T 10 -H "\${{ secrets.VPS_IP }}" >> ~/.ssh/known_hosts 2>/dev/null || true
+          printf 'Host *\n  StrictHostKeyChecking accept-new\n' >> ~/.ssh/config
+          chmod 644 ~/.ssh/config
 
       - name: Deploy
         run: |
@@ -642,7 +645,8 @@ jobs:
             -app $app_name \\
             -repo "git@github.com:\${{ github.repository }}.git" \\
             -domain $domain \\
-            -port $port
+            -port $port \\
+            -branch $branch
 WORKFLOW_EOF
 
     echo ""
@@ -650,16 +654,18 @@ WORKFLOW_EOF
     echo ""
     info "$MSG_SETTINGS_AUTODEPLOY_SECRETS_TITLE"
     echo ""
-    echo "  $MSG_SETTINGS_AUTODEPLOY_SECRETS_INTRO"
-    echo "  $MSG_SETTINGS_AUTODEPLOY_SECRETS_INTRO2"
+    echo "$MSG_SETTINGS_AUTODEPLOY_SECRETS_INTRO"
+    echo "$MSG_SETTINGS_AUTODEPLOY_SECRETS_INTRO2"
     echo ""
-    echo "  $MSG_SETTINGS_AUTODEPLOY_SECRET_IP"
-    echo "  $MSG_SETTINGS_AUTODEPLOY_SECRET_KEY"
+    printf "  $MSG_SETTINGS_AUTODEPLOY_SECRET_IP\n" "$session_ip"
+    echo "$MSG_SETTINGS_AUTODEPLOY_SECRET_KEY"
     echo ""
 
     if [ -n "$session_key" ]; then
         info "$MSG_SETTINGS_AUTODEPLOY_KEY_HINT"
         echo "    cat $session_key"
+        echo ""
+        echo "$MSG_SETTINGS_AUTODEPLOY_KEY_HINT2"
     fi
     echo ""
 }
