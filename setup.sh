@@ -35,6 +35,11 @@ sed_escape() {
     printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/&/\\&/g' -e 's/|/\\|/g'
 }
 
+# Fichiers temporaires a nettoyer au EXIT
+_CLEANUP_FILES=()
+cleanup() { rm -f "${_CLEANUP_FILES[@]}"; }
+trap cleanup EXIT
+
 # Lire une variable depuis un fichier key="value" de facon securisee
 read_state_var() {
     local file="$1" var="$2"
@@ -68,7 +73,7 @@ if [ -f "${SCRIPT_DIR}/lang.sh" ]; then
     . "${SCRIPT_DIR}/lang.sh"
 else
     _LANG_TMP=$(mktemp)
-    trap 'rm -f "$_LANG_TMP"' EXIT
+    _CLEANUP_FILES+=("$_LANG_TMP")
     curl -fsSL "https://raw.githubusercontent.com/mariusdjen/vpskit/main/lang.sh" -o "$_LANG_TMP" 2>/dev/null && . "$_LANG_TMP"
 fi
 
@@ -346,11 +351,7 @@ elif [ "$MODE" = "update" ]; then
 fi
 
 # --- Sauvegarder la session locale ---
-cat > "$LOCAL_STATE" << LOCALEOF
-VPS_IP="$VPS_IP"
-SSH_KEY="$SSH_KEY"
-USERNAME="$USERNAME"
-LOCALEOF
+printf 'VPS_IP="%s"\nSSH_KEY="%s"\nUSERNAME="%s"\n' "$VPS_IP" "$SSH_KEY" "$USERNAME" > "$LOCAL_STATE"
 chmod 600 "$LOCAL_STATE"
 
 # =========================================
@@ -360,7 +361,7 @@ chmod 600 "$LOCAL_STATE"
 # Créer le script distant dans un fichier temporaire
 # (évite les conflits de parsing avec les case/esac dans $(cat << ...))
 TMPSCRIPT=$(mktemp)
-trap 'rm -f "$TMPSCRIPT"' EXIT
+_CLEANUP_FILES+=("$TMPSCRIPT")
 cat > "$TMPSCRIPT" << 'REMOTE_EOF'
 #!/bin/bash
 set -euo pipefail
@@ -850,8 +851,9 @@ else
     sed -i "s|__USERNAME__|$SAFE_USERNAME|g" "$TMPSCRIPT"
 fi
 
-# Envoyer le script sur le serveur et l'exécuter
-if ! scp -i "$SSH_KEY" "$TMPSCRIPT" "${SSH_USER}@${VPS_IP}:/tmp/vps-bootstrap-remote.sh"; then
+# Envoyer le script sur le serveur et l'exécuter (nom aleatoire pour eviter les attaques symlink)
+REMOTE_TMP=$(ssh -i "$SSH_KEY" -o BatchMode=yes "${SSH_USER}@${VPS_IP}" "mktemp /tmp/vps-XXXXXXXXXX.sh")
+if ! scp -i "$SSH_KEY" "$TMPSCRIPT" "${SSH_USER}@${VPS_IP}:${REMOTE_TMP}"; then
     err "$MSG_SETUP_SCP_ERR"
     rm -f "$TMPSCRIPT"
     exit 1
@@ -859,9 +861,9 @@ fi
 rm -f "$TMPSCRIPT"
 
 if [ "$USE_SUDO" = true ]; then
-    ssh -t -i "$SSH_KEY" "${SSH_USER}@${VPS_IP}" "chmod 700 /tmp/vps-bootstrap-remote.sh; sudo bash /tmp/vps-bootstrap-remote.sh; rm -f /tmp/vps-bootstrap-remote.sh"
+    ssh -t -i "$SSH_KEY" "${SSH_USER}@${VPS_IP}" "chmod 700 '${REMOTE_TMP}'; sudo bash '${REMOTE_TMP}'; rm -f '${REMOTE_TMP}'"
 else
-    ssh -t -i "$SSH_KEY" "${SSH_USER}@${VPS_IP}" "chmod 700 /tmp/vps-bootstrap-remote.sh; bash /tmp/vps-bootstrap-remote.sh; rm -f /tmp/vps-bootstrap-remote.sh"
+    ssh -t -i "$SSH_KEY" "${SSH_USER}@${VPS_IP}" "chmod 700 '${REMOTE_TMP}'; bash '${REMOTE_TMP}'; rm -f '${REMOTE_TMP}'"
 fi
 
 # =========================================

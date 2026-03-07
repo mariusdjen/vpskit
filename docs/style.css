@@ -410,7 +410,7 @@ img { max-width: 100%; }
    ======================================== */
 .features-grid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: 20px;
 }
 
@@ -724,6 +724,16 @@ img { max-width: 100%; }
   color: var(--text-secondary);
 }
 
+.badge-done {
+  background: var(--accent-glow);
+  color: var(--accent);
+}
+
+.timeline-item.done .timeline-dot {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
 .timeline-item h3 {
   font-size: 1.15rem;
   margin-bottom: 6px;
@@ -734,6 +744,56 @@ img { max-width: 100%; }
   color: var(--text-secondary);
   font-size: 0.95rem;
   line-height: 1.6;
+}
+
+/* ========================================
+   SETUP DETAILS
+   ======================================== */
+.setup-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+}
+
+.setup-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  background: var(--surface);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+  transition: border-color 0.3s, transform 0.3s;
+}
+
+.setup-item:hover {
+  border-color: var(--accent);
+  transform: translateY(-2px);
+}
+
+.setup-icon {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  color: var(--accent);
+}
+
+.setup-icon svg {
+  width: 100%;
+  height: 100%;
+}
+
+.setup-content h4 {
+  font-size: 0.95rem;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.setup-content p {
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  line-height: 1.5;
 }
 
 /* ========================================
@@ -771,6 +831,12 @@ img { max-width: 100%; }
 /* ========================================
    RESPONSIVE
    ======================================== */
+@media (max-width: 1024px) {
+  .features-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
 @media (max-width: 768px) {
   .section {
     padding: 64px 0;
@@ -790,6 +856,10 @@ img { max-width: 100%; }
   }
 
   .features-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .setup-grid {
     grid-template-columns: 1fr;
   }
 

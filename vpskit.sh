@@ -59,6 +59,7 @@ show_menu() {
     echo -e "  ${GREEN}4)${NC} ${MSG_VPSKIT_MENU_4}"
     echo -e "  ${GREEN}5)${NC} ${MSG_VPSKIT_MENU_5}"
     echo -e "  ${GREEN}6)${NC} ${MSG_VPSKIT_MENU_6}"
+    echo -e "  ${GREEN}7)${NC} ${MSG_VPSKIT_MENU_7}"
     echo ""
 }
 
@@ -69,8 +70,7 @@ run_script() {
     local tmp_script
 
     tmp_script=$(mktemp)
-    # shellcheck disable=SC2064
-    trap "rm -f '$tmp_script'" EXIT
+    trap 'rm -f "$tmp_script" "${_LANG_TMP:-}"' EXIT
 
     info "$(printf "$MSG_VPSKIT_DOWNLOADING" "$script_name")"
 
@@ -157,6 +157,7 @@ main() {
             deploy)   shift; launch "deploy.sh" "$@" ;;
             status)   shift; launch "status.sh" "$@" ;;
             backup)   shift; launch "backup.sh" "$@" ;;
+            security) shift; launch "security.sh" "$@" ;;
             settings) shift; launch "settings.sh" "$@" ;;
             *)
                 err "$(printf "$MSG_VPSKIT_UNKNOWN_CMD" "$1")"
@@ -196,10 +197,15 @@ main() {
                 ;;
             5)
                 echo ""
-                launch "settings.sh"
+                launch "security.sh"
                 echo ""
                 ;;
             6)
+                echo ""
+                launch "settings.sh"
+                echo ""
+                ;;
+            7)
                 echo ""
                 info "$MSG_VPSKIT_BYE"
                 exit 0

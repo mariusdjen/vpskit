@@ -16,6 +16,12 @@ jobs:
         run: |
           bash -n setup.sh
           bash -n deploy.sh
+          bash -n backup.sh
+          bash -n status.sh
+          bash -n settings.sh
+          bash -n security.sh
+          bash -n vpskit.sh
+          bash -n lang.sh
 
       - name: ShellCheck
         uses: ludeeus/action-shellcheck@master

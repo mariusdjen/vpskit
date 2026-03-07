@@ -28,6 +28,11 @@ sed_escape() {
     printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/&/\\&/g' -e 's/|/\\|/g'
 }
 
+# Fichiers temporaires a nettoyer au EXIT
+_CLEANUP_FILES=()
+cleanup() { rm -f "${_CLEANUP_FILES[@]}"; }
+trap cleanup EXIT
+
 # Lire une variable depuis un fichier key="value" de facon securisee
 read_state_var() {
     local file="$1" var="$2"
@@ -61,7 +66,7 @@ if [ -f "${SCRIPT_DIR}/lang.sh" ]; then
     . "${SCRIPT_DIR}/lang.sh"
 else
     _LANG_TMP=$(mktemp)
-    trap 'rm -f "$_LANG_TMP"' EXIT
+    _CLEANUP_FILES+=("$_LANG_TMP")
     curl -fsSL "https://raw.githubusercontent.com/mariusdjen/vpskit/main/lang.sh" -o "$_LANG_TMP" 2>/dev/null && . "$_LANG_TMP"
 fi
 
@@ -286,7 +291,7 @@ if [ "$RESTORE" = true ]; then
     success "$MSG_BACKUP_RESTORE_FILE_SENT"
 
     TMPSCRIPT=$(mktemp)
-    trap 'rm -f "$TMPSCRIPT"' EXIT
+    _CLEANUP_FILES+=("$TMPSCRIPT")
     cat > "$TMPSCRIPT" << 'RESTORE_EOF'
 #!/bin/bash
 set -euo pipefail
@@ -413,7 +418,8 @@ RESTORE_EOF
         sed -i "s|__USERNAME__|$SAFE_USER|g" "$TMPSCRIPT"
     fi
 
-    scp -i "$SSH_KEY" "$TMPSCRIPT" "${USERNAME}@${VPS_IP}:/tmp/vps-restore-remote.sh"
+    REMOTE_TMP=$(ssh -i "$SSH_KEY" -o BatchMode=yes "${USERNAME}@${VPS_IP}" "mktemp /tmp/vps-XXXXXXXXXX.sh")
+    scp -i "$SSH_KEY" "$TMPSCRIPT" "${USERNAME}@${VPS_IP}:${REMOTE_TMP}"
     rm -f "$TMPSCRIPT"
 
     if [ -t 0 ]; then
@@ -422,7 +428,7 @@ RESTORE_EOF
         SSH_TTY_FLAG=""
     fi
 
-    ssh $SSH_TTY_FLAG -i "$SSH_KEY" "${USERNAME}@${VPS_IP}" "chmod 700 /tmp/vps-restore-remote.sh; sudo bash /tmp/vps-restore-remote.sh; rm -f /tmp/vps-restore-remote.sh"
+    ssh $SSH_TTY_FLAG -i "$SSH_KEY" "${USERNAME}@${VPS_IP}" "chmod 700 '${REMOTE_TMP}'; sudo bash '${REMOTE_TMP}'; rm -f '${REMOTE_TMP}'"
 
     echo ""
     echo -e "${BOLD}$MSG_BACKUP_RESTORE_DONE${NC}"
@@ -435,7 +441,7 @@ fi
 # =========================================
 
 TMPSCRIPT=$(mktemp)
-trap 'rm -f "$TMPSCRIPT"' EXIT
+_CLEANUP_FILES+=("$TMPSCRIPT")
 cat > "$TMPSCRIPT" << 'BACKUP_EOF'
 #!/bin/bash
 set -euo pipefail
@@ -497,16 +503,9 @@ backup_app() {
         COMMIT=$(cd "$APP_PATH" && git rev-parse HEAD 2>/dev/null || echo "")
     fi
 
-    # Metadonnees JSON
-    cat > "$WORK/metadata.json" << META_BLOCK
-{
-    "app": "$APP",
-    "date": "$DATE",
-    "domain": "$DOMAIN",
-    "port": "$PORT",
-    "commit": "$COMMIT"
-}
-META_BLOCK
+    # Metadonnees JSON (printf pour eviter l'expansion de commandes)
+    printf '{\n    "app": "%s",\n    "date": "%s",\n    "domain": "%s",\n    "port": "%s",\n    "commit": "%s"\n}\n' \
+        "$APP" "$DATE" "$DOMAIN" "$PORT" "$COMMIT" > "$WORK/metadata.json"
     success "$RMSG_BACKUP_METADATA_SAVED"
 
     # Caddyfile
@@ -515,7 +514,7 @@ META_BLOCK
         success "$RMSG_BACKUP_CADDYFILE_SAVED"
     fi
 
-    # Volumes Docker
+    # Dump base de donnees
     COMPOSE_FILE=""
     for f in docker-compose.yml docker-compose.yaml compose.yml compose.yaml; do
         if [ -f "$APP_PATH/$f" ]; then
@@ -525,7 +524,62 @@ META_BLOCK
     done
 
     if [ -n "$COMPOSE_FILE" ]; then
-        # Recuperer les volumes depuis docker compose
+        SERVICES=$(cd "$APP_PATH" && docker compose ps --format '{{.Service}}:{{.Image}}' 2>/dev/null || true)
+
+        while IFS= read -r service_info; do
+            [ -z "$service_info" ] && continue
+            SERVICE_NAME=$(echo "$service_info" | cut -d: -f1)
+            SERVICE_IMAGE=$(echo "$service_info" | cut -d: -f2-)
+
+            # PostgreSQL
+            if echo "$SERVICE_IMAGE" | grep -qi "postgres"; then
+                info "$(printf "$RMSG_BACKUP_DB_DETECTED" "PostgreSQL" "$SERVICE_NAME")"
+                DB_USER=$(cd "$APP_PATH" && docker compose exec -T "$SERVICE_NAME" printenv POSTGRES_USER 2>/dev/null || echo "postgres")
+                DB_NAME=$(cd "$APP_PATH" && docker compose exec -T "$SERVICE_NAME" printenv POSTGRES_DB 2>/dev/null || echo "")
+                if [ -z "$DB_NAME" ]; then
+                    docker compose -f "$APP_PATH/$COMPOSE_FILE" exec -T "$SERVICE_NAME" pg_dumpall -U "$DB_USER" 2>/dev/null | gzip > "$WORK/db-postgres-${SERVICE_NAME}.sql.gz" || true
+                else
+                    docker compose -f "$APP_PATH/$COMPOSE_FILE" exec -T "$SERVICE_NAME" pg_dump -U "$DB_USER" "$DB_NAME" 2>/dev/null | gzip > "$WORK/db-postgres-${SERVICE_NAME}.sql.gz" || true
+                fi
+                if [ -s "$WORK/db-postgres-${SERVICE_NAME}.sql.gz" ]; then
+                    success "$(printf "$RMSG_BACKUP_DB_DUMPED" "PostgreSQL" "$SERVICE_NAME")"
+                else
+                    rm -f "$WORK/db-postgres-${SERVICE_NAME}.sql.gz"
+                    warn "$(printf "$RMSG_BACKUP_DB_DUMP_FAILED" "PostgreSQL" "$SERVICE_NAME")"
+                fi
+            fi
+
+            # MySQL / MariaDB
+            if echo "$SERVICE_IMAGE" | grep -qiE "mysql|mariadb"; then
+                info "$(printf "$RMSG_BACKUP_DB_DETECTED" "MySQL" "$SERVICE_NAME")"
+                DB_PASS=$(cd "$APP_PATH" && docker compose exec -T "$SERVICE_NAME" printenv MYSQL_ROOT_PASSWORD 2>/dev/null || echo "")
+                if [ -n "$DB_PASS" ]; then
+                    docker compose -f "$APP_PATH/$COMPOSE_FILE" exec -T "$SERVICE_NAME" mysqldump --all-databases -uroot -p"$DB_PASS" 2>/dev/null | gzip > "$WORK/db-mysql-${SERVICE_NAME}.sql.gz" || true
+                else
+                    docker compose -f "$APP_PATH/$COMPOSE_FILE" exec -T "$SERVICE_NAME" mysqldump --all-databases -uroot 2>/dev/null | gzip > "$WORK/db-mysql-${SERVICE_NAME}.sql.gz" || true
+                fi
+                if [ -s "$WORK/db-mysql-${SERVICE_NAME}.sql.gz" ]; then
+                    success "$(printf "$RMSG_BACKUP_DB_DUMPED" "MySQL" "$SERVICE_NAME")"
+                else
+                    rm -f "$WORK/db-mysql-${SERVICE_NAME}.sql.gz"
+                    warn "$(printf "$RMSG_BACKUP_DB_DUMP_FAILED" "MySQL" "$SERVICE_NAME")"
+                fi
+            fi
+
+            # MongoDB
+            if echo "$SERVICE_IMAGE" | grep -qi "mongo"; then
+                info "$(printf "$RMSG_BACKUP_DB_DETECTED" "MongoDB" "$SERVICE_NAME")"
+                docker compose -f "$APP_PATH/$COMPOSE_FILE" exec -T "$SERVICE_NAME" mongodump --archive 2>/dev/null | gzip > "$WORK/db-mongo-${SERVICE_NAME}.archive.gz" || true
+                if [ -s "$WORK/db-mongo-${SERVICE_NAME}.archive.gz" ]; then
+                    success "$(printf "$RMSG_BACKUP_DB_DUMPED" "MongoDB" "$SERVICE_NAME")"
+                else
+                    rm -f "$WORK/db-mongo-${SERVICE_NAME}.archive.gz"
+                    warn "$(printf "$RMSG_BACKUP_DB_DUMP_FAILED" "MongoDB" "$SERVICE_NAME")"
+                fi
+            fi
+        done <<< "$SERVICES"
+
+        # Volumes Docker (fallback / complement)
         VOLUMES=$(cd "$APP_PATH" && docker compose config --volumes 2>/dev/null || true)
         PROJECT_NAME=$(cd "$APP_PATH" && docker compose config --format json 2>/dev/null | grep -o '"name":"[^"]*"' | head -1 | cut -d'"' -f4 || echo "$APP")
 
@@ -554,6 +608,17 @@ META_BLOCK
 
     success "$(printf "$RMSG_BACKUP_ARCHIVE_CREATED" "$ARCHIVE_NAME")"
     echo "$ARCHIVE_NAME" >> /tmp/vps-backup-files.txt
+
+    # Upload vers S3 si rclone est configure
+    if command -v rclone &>/dev/null && [ -f "$HOME/.config/rclone/rclone.conf" ]; then
+        BUCKET_NAME="__S3_BUCKET__"
+        if [ -n "$BUCKET_NAME" ]; then
+            info "$(printf "$RMSG_BACKUP_S3_UPLOADING" "$ARCHIVE_NAME")"
+            rclone copy "/tmp/$ARCHIVE_NAME" "s3backup:$BUCKET_NAME/" 2>/dev/null && \
+                success "$(printf "$RMSG_BACKUP_S3_UPLOADED" "$ARCHIVE_NAME")" || \
+                warn "$(printf "$RMSG_BACKUP_S3_UPLOAD_FAILED" "$ARCHIVE_NAME")"
+        fi
+    fi
 }
 
 # Nettoyage
@@ -579,6 +644,16 @@ if [ ! -f /tmp/vps-backup-files.txt ]; then
     echo ""
     warn "$RMSG_BACKUP_WARN_NOTHING"
     exit 0
+fi
+
+# Rotation S3 (supprimer les vieux backups)
+if command -v rclone &>/dev/null && [ -f "$HOME/.config/rclone/rclone.conf" ]; then
+    BUCKET_NAME="__S3_BUCKET__"
+    RETENTION_DAYS="__RETENTION_DAYS__"
+    if [ -n "$BUCKET_NAME" ] && [ -n "$RETENTION_DAYS" ] && [ "$RETENTION_DAYS" -gt 0 ] 2>/dev/null; then
+        rclone delete "s3backup:$BUCKET_NAME/" --min-age "${RETENTION_DAYS}d" 2>/dev/null
+        success "$(printf "$RMSG_BACKUP_S3_ROTATION" "$RETENTION_DAYS")"
+    fi
 fi
 
 # Rendre les archives lisibles par l'utilisateur (pour scp)
@@ -608,12 +683,31 @@ inject_lang_into_remote "$TMPSCRIPT"
 
 SAFE_APP=$(sed_escape "$APP_NAME")
 SAFE_USER=$(sed_escape "$USERNAME")
+
+# Charger la config S3 si elle existe
+SSH_DIR="$HOME/.ssh"
+[ "$OS" = "windows" ] && SSH_DIR="$USERPROFILE/.ssh"
+S3_CONFIG="$SSH_DIR/.vpskit-s3"
+S3_BUCKET=""
+S3_RETENTION_DAYS="30"
+if [ -f "$S3_CONFIG" ]; then
+    S3_BUCKET=$(read_state_var "$S3_CONFIG" "S3_BUCKET")
+    S3_RETENTION_DAYS=$(read_state_var "$S3_CONFIG" "S3_RETENTION_DAYS")
+    [ -z "$S3_RETENTION_DAYS" ] && S3_RETENTION_DAYS="30"
+fi
+SAFE_BUCKET=$(sed_escape "$S3_BUCKET")
+SAFE_RETENTION=$(sed_escape "$S3_RETENTION_DAYS")
+
 if [ "$OS" = "mac" ]; then
     sed -i '' "s|__APP_NAME__|$SAFE_APP|g" "$TMPSCRIPT"
     sed -i '' "s|__USERNAME__|$SAFE_USER|g" "$TMPSCRIPT"
+    sed -i '' "s|__S3_BUCKET__|$SAFE_BUCKET|g" "$TMPSCRIPT"
+    sed -i '' "s|__RETENTION_DAYS__|$SAFE_RETENTION|g" "$TMPSCRIPT"
 else
     sed -i "s|__APP_NAME__|$SAFE_APP|g" "$TMPSCRIPT"
     sed -i "s|__USERNAME__|$SAFE_USER|g" "$TMPSCRIPT"
+    sed -i "s|__S3_BUCKET__|$SAFE_BUCKET|g" "$TMPSCRIPT"
+    sed -i "s|__RETENTION_DAYS__|$SAFE_RETENTION|g" "$TMPSCRIPT"
 fi
 
 # =========================================
@@ -621,7 +715,8 @@ fi
 # =========================================
 
 info "$MSG_BACKUP_SENDING_SCRIPT"
-if ! scp -i "$SSH_KEY" "$TMPSCRIPT" "${USERNAME}@${VPS_IP}:/tmp/vps-backup-remote.sh"; then
+REMOTE_TMP=$(ssh -i "$SSH_KEY" -o BatchMode=yes "${USERNAME}@${VPS_IP}" "mktemp /tmp/vps-XXXXXXXXXX.sh")
+if ! scp -i "$SSH_KEY" "$TMPSCRIPT" "${USERNAME}@${VPS_IP}:${REMOTE_TMP}"; then
     err "$MSG_BACKUP_ERR_SEND"
     rm -f "$TMPSCRIPT"
     exit 1
@@ -635,7 +730,7 @@ else
     SSH_TTY_FLAG=""
 fi
 
-ssh $SSH_TTY_FLAG -i "$SSH_KEY" "${USERNAME}@${VPS_IP}" "chmod 700 /tmp/vps-backup-remote.sh; sudo bash /tmp/vps-backup-remote.sh; rm -f /tmp/vps-backup-remote.sh"
+ssh $SSH_TTY_FLAG -i "$SSH_KEY" "${USERNAME}@${VPS_IP}" "chmod 700 '${REMOTE_TMP}'; sudo bash '${REMOTE_TMP}'; rm -f '${REMOTE_TMP}'"
 
 # =========================================
 # RECUPERATION DES FICHIERS

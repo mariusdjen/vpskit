@@ -115,8 +115,11 @@ load_lang() {
     fi
 
     if [ -f "$lang_file" ]; then
-        # shellcheck source=/dev/null
-        . "$lang_file"
+        # Verifier la syntaxe avant de sourcer (protection contre injection)
+        if bash -n "$lang_file" 2>/dev/null; then
+            # shellcheck source=/dev/null
+            . "$lang_file"
+        fi
     fi
 
     VPSKIT_LANG_CODE="${lang_code}"

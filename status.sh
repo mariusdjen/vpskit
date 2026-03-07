@@ -27,6 +27,11 @@ sed_escape() {
     printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/&/\\&/g' -e 's/|/\\|/g'
 }
 
+# Fichiers temporaires a nettoyer au EXIT
+_CLEANUP_FILES=()
+cleanup() { rm -f "${_CLEANUP_FILES[@]}"; }
+trap cleanup EXIT
+
 # Lire une variable depuis un fichier key="value" de facon securisee
 read_state_var() {
     local file="$1" var="$2"
@@ -60,7 +65,7 @@ if [ -f "${SCRIPT_DIR}/lang.sh" ]; then
     . "${SCRIPT_DIR}/lang.sh"
 else
     _LANG_TMP=$(mktemp)
-    trap 'rm -f "$_LANG_TMP"' EXIT
+    _CLEANUP_FILES+=("$_LANG_TMP")
     curl -fsSL "https://raw.githubusercontent.com/mariusdjen/vpskit/main/lang.sh" -o "$_LANG_TMP" 2>/dev/null && . "$_LANG_TMP"
 fi
 
@@ -180,7 +185,7 @@ fi
 # =========================================
 
 TMPSCRIPT=$(mktemp)
-trap 'rm -f "$TMPSCRIPT"' EXIT
+_CLEANUP_FILES+=("$TMPSCRIPT")
 cat > "$TMPSCRIPT" << 'STATUS_EOF'
 #!/bin/bash
 set -euo pipefail
@@ -347,6 +352,66 @@ if command -v docker &>/dev/null; then
 else
     echo -e "${RED}${RMSG_STATUS_DOCKER_NOT_INSTALLED}${NC}"
 fi
+
+# --- Securite (resume) ---
+echo ""
+echo "  -----------------------------------------"
+echo -e "${BOLD}$RMSG_STATUS_SECURITY_SECTION${NC}"
+
+# Firewall
+if command -v ufw &>/dev/null; then
+    if ufw status 2>/dev/null | grep -q "Status: active"; then
+        echo -e "    ${GREEN}[OK]${NC}   $(printf "$RMSG_STATUS_SECURITY_FIREWALL_OK" "ufw")"
+    else
+        echo -e "    ${RED}[ERR]${NC}  $RMSG_STATUS_SECURITY_FIREWALL_ERR"
+    fi
+elif command -v firewall-cmd &>/dev/null; then
+    if firewall-cmd --state 2>/dev/null | grep -q running; then
+        echo -e "    ${GREEN}[OK]${NC}   $(printf "$RMSG_STATUS_SECURITY_FIREWALL_OK" "firewalld")"
+    else
+        echo -e "    ${RED}[ERR]${NC}  $RMSG_STATUS_SECURITY_FIREWALL_ERR"
+    fi
+else
+    echo -e "    ${YELLOW}[WARN]${NC} $RMSG_STATUS_SECURITY_FIREWALL_NONE"
+fi
+
+# Fail2ban
+if systemctl is-active fail2ban &>/dev/null; then
+    BANNED=$(fail2ban-client status sshd 2>/dev/null | grep "Currently banned" | awk '{print $NF}' || true)
+    [ -z "$BANNED" ] && BANNED=$(fail2ban-client status ssh 2>/dev/null | grep "Currently banned" | awk '{print $NF}' || true)
+    [ -z "$BANNED" ] && BANNED="0"
+    echo -e "    ${GREEN}[OK]${NC}   $(printf "$RMSG_STATUS_SECURITY_FAIL2BAN_OK" "$BANNED")"
+else
+    echo -e "    ${RED}[ERR]${NC}  $RMSG_STATUS_SECURITY_FAIL2BAN_ERR"
+fi
+
+# SSH root
+if grep -qE "^\s*PermitRootLogin\s+no" /etc/ssh/sshd_config 2>/dev/null; then
+    echo -e "    ${GREEN}[OK]${NC}   $RMSG_STATUS_SECURITY_SSH_ROOT_OK"
+else
+    echo -e "    ${RED}[ERR]${NC}  $RMSG_STATUS_SECURITY_SSH_ROOT_ERR"
+fi
+
+# SSL par app (compact)
+if command -v openssl &>/dev/null; then
+    for SEC_APP_DIR in /home/__USERNAME__/apps/*/; do
+        [ -d "$SEC_APP_DIR" ] || continue
+        SEC_DOMAIN=$(cat "$SEC_APP_DIR/.deploy-domain" 2>/dev/null || true)
+        [ -z "$SEC_DOMAIN" ] && continue
+        SEC_EXPIRY=$(echo | timeout 5 openssl s_client -servername "$SEC_DOMAIN" -connect "$SEC_DOMAIN":443 2>/dev/null | openssl x509 -noout -enddate 2>/dev/null | cut -d= -f2 || true)
+        if [ -n "$SEC_EXPIRY" ]; then
+            SEC_DAYS=$(( ($(date -d "$SEC_EXPIRY" +%s 2>/dev/null || echo "0") - $(date +%s)) / 86400 ))
+            if [ "$SEC_DAYS" -lt 0 ]; then
+                echo -e "    ${RED}[ERR]${NC}  $(printf "$RMSG_STATUS_SECURITY_SSL_ERR" "$SEC_DOMAIN")"
+            elif [ "$SEC_DAYS" -lt 30 ]; then
+                echo -e "    ${YELLOW}[WARN]${NC} $(printf "$RMSG_STATUS_SECURITY_SSL_WARN" "$SEC_DOMAIN" "$SEC_DAYS")"
+            else
+                echo -e "    ${GREEN}[OK]${NC}   $(printf "$RMSG_STATUS_SECURITY_SSL_OK" "$SEC_DOMAIN" "$SEC_DAYS")"
+            fi
+        fi
+    done
+fi
+
 echo "========================================="
 echo ""
 STATUS_EOF
@@ -373,7 +438,8 @@ fi
 # =========================================
 
 info "$MSG_STATUS_SENDING"
-if ! scp -i "$SSH_KEY" "$TMPSCRIPT" "${USERNAME}@${VPS_IP}:/tmp/vps-status-remote.sh"; then
+REMOTE_TMP=$(ssh -i "$SSH_KEY" -o BatchMode=yes "${USERNAME}@${VPS_IP}" "mktemp /tmp/vps-XXXXXXXXXX.sh")
+if ! scp -i "$SSH_KEY" "$TMPSCRIPT" "${USERNAME}@${VPS_IP}:${REMOTE_TMP}"; then
     err "$MSG_STATUS_ERR_SEND"
     rm -f "$TMPSCRIPT"
     exit 1
@@ -387,4 +453,4 @@ else
     SSH_TTY_FLAG=""
 fi
 
-ssh $SSH_TTY_FLAG -i "$SSH_KEY" "${USERNAME}@${VPS_IP}" "chmod 700 /tmp/vps-status-remote.sh; sudo bash /tmp/vps-status-remote.sh; rm -f /tmp/vps-status-remote.sh"
+ssh $SSH_TTY_FLAG -i "$SSH_KEY" "${USERNAME}@${VPS_IP}" "chmod 700 '${REMOTE_TMP}'; sudo bash '${REMOTE_TMP}'; rm -f '${REMOTE_TMP}'"

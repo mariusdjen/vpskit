@@ -28,6 +28,11 @@ sed_escape() {
     printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/&/\\&/g' -e 's/|/\\|/g'
 }
 
+# Fichiers temporaires a nettoyer au EXIT
+_CLEANUP_FILES=()
+cleanup() { rm -f "${_CLEANUP_FILES[@]}"; }
+trap cleanup EXIT
+
 # Lire une variable depuis un fichier key="value" de facon securisee
 read_state_var() {
     local file="$1" var="$2"
@@ -61,7 +66,7 @@ if [ -f "${SCRIPT_DIR}/lang.sh" ]; then
     . "${SCRIPT_DIR}/lang.sh"
 else
     _LANG_TMP=$(mktemp)
-    trap 'rm -f "$_LANG_TMP"' EXIT
+    _CLEANUP_FILES+=("$_LANG_TMP")
     curl -fsSL "https://raw.githubusercontent.com/mariusdjen/vpskit/main/lang.sh" -o "$_LANG_TMP" 2>/dev/null && . "$_LANG_TMP"
 fi
 
@@ -488,7 +493,7 @@ if [ "$ROLLBACK" = false ]; then
         err "$MSG_DEPLOY_ERR_NO_DOMAIN"
         ERRORS=$((ERRORS + 1))
     fi
-    if ! [[ "$APP_PORT" =~ ^[0-9]+$ ]]; then
+    if ! [[ "$APP_PORT" =~ ^[0-9]+$ ]] || [ "$APP_PORT" -lt 1 ] || [ "$APP_PORT" -gt 65535 ]; then
         err "$(printf "$MSG_DEPLOY_ERR_INVALID_PORT" "$APP_PORT")"
         ERRORS=$((ERRORS + 1))
     fi
@@ -547,7 +552,7 @@ success "$MSG_DEPLOY_SSH_OK"
 
 if [ "$ROLLBACK" = true ]; then
     TMPSCRIPT=$(mktemp)
-    trap 'rm -f "$TMPSCRIPT"' EXIT
+    _CLEANUP_FILES+=("$TMPSCRIPT")
     cat > "$TMPSCRIPT" << 'ROLLBACK_EOF'
 #!/bin/bash
 set -euo pipefail
@@ -677,7 +682,8 @@ ROLLBACK_EOF
     fi
 
     info "$MSG_DEPLOY_ROLLBACK_SENDING"
-    scp -i "$SSH_KEY" "$TMPSCRIPT" "${USERNAME}@${VPS_IP}:/tmp/vps-rollback-remote.sh"
+    REMOTE_TMP=$(ssh -i "$SSH_KEY" -o BatchMode=yes "${USERNAME}@${VPS_IP}" "mktemp /tmp/vps-XXXXXXXXXX.sh")
+    scp -i "$SSH_KEY" "$TMPSCRIPT" "${USERNAME}@${VPS_IP}:${REMOTE_TMP}"
     rm -f "$TMPSCRIPT"
 
     if [ -t 0 ]; then
@@ -686,7 +692,7 @@ ROLLBACK_EOF
         SSH_TTY_FLAG=""
     fi
 
-    ssh $SSH_TTY_FLAG -i "$SSH_KEY" "${USERNAME}@${VPS_IP}" "chmod 700 /tmp/vps-rollback-remote.sh; sudo bash /tmp/vps-rollback-remote.sh; rm -f /tmp/vps-rollback-remote.sh"
+    ssh $SSH_TTY_FLAG -i "$SSH_KEY" "${USERNAME}@${VPS_IP}" "chmod 700 '${REMOTE_TMP}'; sudo bash '${REMOTE_TMP}'; rm -f '${REMOTE_TMP}'"
 
     echo ""
     echo -e "${BOLD}$MSG_DEPLOY_ROLLBACK_DONE_TITLE${NC}"
@@ -699,7 +705,7 @@ fi
 # =========================================
 
 TMPSCRIPT=$(mktemp)
-trap 'rm -f "$TMPSCRIPT"' EXIT
+_CLEANUP_FILES+=("$TMPSCRIPT")
 cat > "$TMPSCRIPT" << 'DEPLOY_EOF'
 #!/bin/bash
 set -euo pipefail
@@ -992,8 +998,9 @@ else
     mkdir -p "/home/$USERNAME/apps"
 
     # Tenter le clone. Si HTTPS échoue (repo privé), basculer en SSH.
-    if sudo -u "$USERNAME" git clone "$REPO_URL" "$APP_DIR" 2>/tmp/git-clone-err.log; then
-        rm -f /tmp/git-clone-err.log
+    GIT_ERR_LOG=$(mktemp /tmp/vps-git-XXXXXXXXXX.log)
+    if sudo -u "$USERNAME" git clone "$REPO_URL" "$APP_DIR" 2>"$GIT_ERR_LOG"; then
+        rm -f "$GIT_ERR_LOG"
         success "$(printf "$RMSG_DEPLOY_CLONE_SUCCESS" "$APP_DIR")"
     else
         # Vérifier si c'est une URL HTTPS GitHub qui a échoué
@@ -1017,10 +1024,11 @@ else
             success "$(printf "$RMSG_DEPLOY_CLONE_SUCCESS" "$APP_DIR")"
         else
             err "$RMSG_DEPLOY_CLONE_FAILED"
-            cat /tmp/git-clone-err.log
+            cat "$GIT_ERR_LOG"
+            rm -f "$GIT_ERR_LOG"
             exit 1
         fi
-        rm -f /tmp/git-clone-err.log
+        rm -f "$GIT_ERR_LOG"
     fi
 fi
 
@@ -1427,8 +1435,8 @@ if [ "$OS" = "mac" ]; then
     sed -i '' "s|__DOMAIN__|$SAFE_DOMAIN|g" "$TMPSCRIPT"
     sed -i '' "s|__APP_PORT__|$SAFE_PORT|g" "$TMPSCRIPT"
     sed -i '' "s|__USERNAME__|$SAFE_USER|g" "$TMPSCRIPT"
-    sed -i '' "s|__HAS_ENV__|$HAS_ENV|g" "$TMPSCRIPT"
-    sed -i '' "s|__CREATE_EMPTY_ENV__|$CREATE_EMPTY_ENV|g" "$TMPSCRIPT"
+    sed -i '' "s|__HAS_ENV__|$(sed_escape "$HAS_ENV")|g" "$TMPSCRIPT"
+    sed -i '' "s|__CREATE_EMPTY_ENV__|$(sed_escape "$CREATE_EMPTY_ENV")|g" "$TMPSCRIPT"
     sed -i '' "s|__DEPLOY_BRANCH__|$SAFE_BRANCH|g" "$TMPSCRIPT"
     sed -i '' "s|__DEPLOY_TAG__|$SAFE_TAG|g" "$TMPSCRIPT"
 else
@@ -1437,8 +1445,8 @@ else
     sed -i "s|__DOMAIN__|$SAFE_DOMAIN|g" "$TMPSCRIPT"
     sed -i "s|__APP_PORT__|$SAFE_PORT|g" "$TMPSCRIPT"
     sed -i "s|__USERNAME__|$SAFE_USER|g" "$TMPSCRIPT"
-    sed -i "s|__HAS_ENV__|$HAS_ENV|g" "$TMPSCRIPT"
-    sed -i "s|__CREATE_EMPTY_ENV__|$CREATE_EMPTY_ENV|g" "$TMPSCRIPT"
+    sed -i "s|__HAS_ENV__|$(sed_escape "$HAS_ENV")|g" "$TMPSCRIPT"
+    sed -i "s|__CREATE_EMPTY_ENV__|$(sed_escape "$CREATE_EMPTY_ENV")|g" "$TMPSCRIPT"
     sed -i "s|__DEPLOY_BRANCH__|$SAFE_BRANCH|g" "$TMPSCRIPT"
     sed -i "s|__DEPLOY_TAG__|$SAFE_TAG|g" "$TMPSCRIPT"
 fi
@@ -1460,7 +1468,8 @@ fi
 
 # Envoyer et exécuter le script distant
 info "$MSG_DEPLOY_SCRIPT_SENDING"
-if ! scp -i "$SSH_KEY" "$TMPSCRIPT" "${USERNAME}@${VPS_IP}:/tmp/vps-deploy-remote.sh"; then
+REMOTE_TMP=$(ssh -i "$SSH_KEY" -o BatchMode=yes "${USERNAME}@${VPS_IP}" "mktemp /tmp/vps-XXXXXXXXXX.sh")
+if ! scp -i "$SSH_KEY" "$TMPSCRIPT" "${USERNAME}@${VPS_IP}:${REMOTE_TMP}"; then
     err "$MSG_DEPLOY_SCRIPT_SEND_FAILED"
     rm -f "$TMPSCRIPT"
     exit 1
@@ -1476,7 +1485,7 @@ else
     SSH_TTY_FLAG=""
 fi
 
-ssh $SSH_TTY_FLAG -i "$SSH_KEY" "${USERNAME}@${VPS_IP}" "chmod 700 /tmp/vps-deploy-remote.sh; sudo bash /tmp/vps-deploy-remote.sh; rm -f /tmp/vps-deploy-remote.sh"
+ssh $SSH_TTY_FLAG -i "$SSH_KEY" "${USERNAME}@${VPS_IP}" "chmod 700 '${REMOTE_TMP}'; sudo bash '${REMOTE_TMP}'; rm -f '${REMOTE_TMP}'"
 
 # =========================================
 # RÉSUMÉ LOCAL

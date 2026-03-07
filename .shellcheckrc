@@ -1,0 +1,2 @@
+# Variables i18n defined in lang/*.sh, used in other scripts
+disable=SC2034
