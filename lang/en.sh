@@ -759,7 +759,9 @@ RMSG_SECURITY_SSL_NO_CERT="%s: no certificate"
 RMSG_SECURITY_SSL_NONE="No application with a domain"
 
 RMSG_SECURITY_PERMS_SECTION="  Permissions:"
+# shellcheck disable=SC2088
 RMSG_SECURITY_PERMS_SSH_DIR_OK="~/.ssh/: 700"
+# shellcheck disable=SC2088
 RMSG_SECURITY_PERMS_SSH_DIR_ERR="~/.ssh/: %s (expected: 700)"
 RMSG_SECURITY_PERMS_AUTHKEYS_OK="authorized_keys: 600"
 RMSG_SECURITY_PERMS_AUTHKEYS_ERR="authorized_keys: %s (expected: 600)"

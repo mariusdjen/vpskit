@@ -32,6 +32,7 @@ else
     # Mode curl : telecharger lang.sh dans un fichier temp
     _LANG_TMP=$(mktemp)
     trap 'rm -f "$_LANG_TMP"' EXIT
+    # shellcheck disable=SC1090
     curl -fsSL "${REPO_BASE}/lang.sh" -o "$_LANG_TMP" 2>/dev/null && . "$_LANG_TMP"
 fi
 

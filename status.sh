@@ -66,6 +66,7 @@ if [ -f "${SCRIPT_DIR}/lang.sh" ]; then
 else
     _LANG_TMP=$(mktemp)
     _CLEANUP_FILES+=("$_LANG_TMP")
+    # shellcheck disable=SC1090
     curl -fsSL "https://raw.githubusercontent.com/mariusdjen/vpskit/main/lang.sh" -o "$_LANG_TMP" 2>/dev/null && . "$_LANG_TMP"
 fi
 
