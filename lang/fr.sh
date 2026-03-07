@@ -731,6 +731,8 @@ RMSG_SECURITY_FIREWALL_ACTIVE_OK="Firewall actif (%s)"
 RMSG_SECURITY_FIREWALL_INACTIVE_ERR="Firewall inactif"
 RMSG_SECURITY_FIREWALL_NOT_INSTALLED="Aucun firewall installe"
 RMSG_SECURITY_FIREWALL_UNEXPECTED_PORT="Port inattendu ouvert : %s"
+RMSG_SECURITY_PORT_PUBLIC="Port %s expose publiquement (0.0.0.0) - %s"
+RMSG_SECURITY_PORT_LOCAL="Port %s local uniquement (127.0.0.1) - %s"
 
 RMSG_SECURITY_FAIL2BAN_SECTION="  Fail2ban :"
 RMSG_SECURITY_FAIL2BAN_ACTIVE_OK="Fail2ban actif"

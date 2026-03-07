@@ -279,14 +279,25 @@ if [ "$FW_FOUND" -eq 0 ]; then
     check_err "$RMSG_SECURITY_FIREWALL_NOT_INSTALLED"
 fi
 
-# Ports ouverts inattendus
+# Ports ouverts inattendus (distinguer public vs local)
 if command -v ss &>/dev/null; then
-    OPEN_PORTS=$(ss -tlnp 2>/dev/null | awk 'NR>1 {print $4}' | grep -oE '[0-9]+$' | sort -un || true)
-    for PORT in $OPEN_PORTS; do
+    ss -tlnp 2>/dev/null | awk 'NR>1 {
+        split($4, addr, ":")
+        port = addr[length(addr)]
+        bind = substr($4, 1, length($4)-length(port)-1)
+        proc = $0
+        gsub(/.*users:\(\("/, "", proc)
+        gsub(/".*/, "", proc)
+        print port, bind, proc
+    }' | sort -t' ' -k1,1 -un | while read -r PORT BIND PROC; do
         case "$PORT" in
             22|80|443) ;;
             *)
-                check_warn "$(printf "$RMSG_SECURITY_FIREWALL_UNEXPECTED_PORT" "$PORT")"
+                if echo "$BIND" | grep -qE '^(127\.|::1|\[::1\])'; then
+                    check_ok "$(printf "$RMSG_SECURITY_PORT_LOCAL" "$PORT" "$PROC")"
+                else
+                    check_warn "$(printf "$RMSG_SECURITY_PORT_PUBLIC" "$PORT" "$PROC")"
+                fi
                 ;;
         esac
     done
