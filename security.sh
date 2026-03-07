@@ -279,6 +279,10 @@ if [ "$FW_FOUND" -eq 0 ]; then
     check_err "$RMSG_SECURITY_FIREWALL_NOT_INSTALLED"
 fi
 
+# Fallback pour nouvelles variables (compatibilite cache langue)
+: "${RMSG_SECURITY_PORT_PUBLIC:=Port %s exposed publicly (0.0.0.0) - %s}"
+: "${RMSG_SECURITY_PORT_LOCAL:=Port %s local only (127.0.0.1) - %s}"
+
 # Ports ouverts inattendus (distinguer public vs local)
 if command -v ss &>/dev/null; then
     ss -tlnp 2>/dev/null | awk 'NR>1 {
