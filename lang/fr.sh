@@ -50,7 +50,7 @@ MSG_SETTINGS_MENU_6="Configurer le backup distant"
 MSG_SETTINGS_MENU_7="Retour"
 MSG_SETTINGS_CHOICE_PROMPT="Votre choix (1-7) : "
 MSG_SETTINGS_BACK="Retour."
-MSG_SETTINGS_INVALID_CHOICE="Choix invalide, entrez un nombre entre 1 et 6"
+MSG_SETTINGS_INVALID_CHOICE="Choix invalide, entrez un nombre entre 1 et 7"
 
 # -- Raccourcis SSH --
 MSG_SETTINGS_SSH_NO_CONFIG="Aucun fichier ~/.ssh/config. Rien a faire."

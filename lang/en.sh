@@ -50,7 +50,7 @@ MSG_SETTINGS_MENU_6="Set up remote backup"
 MSG_SETTINGS_MENU_7="Back"
 MSG_SETTINGS_CHOICE_PROMPT="Your choice (1-7): "
 MSG_SETTINGS_BACK="Back."
-MSG_SETTINGS_INVALID_CHOICE="Invalid choice, enter a number between 1 and 6"
+MSG_SETTINGS_INVALID_CHOICE="Invalid choice, enter a number between 1 and 7"
 
 MSG_SETTINGS_SSH_NO_CONFIG="No ~/.ssh/config file found. Nothing to do."
 MSG_SETTINGS_SSH_LIST_TITLE="SSH shortcuts in ~/.ssh/config:"
