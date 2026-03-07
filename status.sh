@@ -207,10 +207,10 @@ UPTIME_STR=$(uptime -p 2>/dev/null | sed 's/up //' || echo "N/A")
 CPU_CORES=$(nproc)
 # Calcul CPU portable via /proc/stat (moyenne sur 1 seconde)
 if [ -f /proc/stat ]; then
-    read -r _ c1 c2 c3 c4 c5 c6 c7 < <(head -1 /proc/stat)
+    read -r _ c1 c2 c3 c4 c5 c6 c7 _rest < <(head -1 /proc/stat)
     IDLE1=$c4; TOTAL1=$((c1+c2+c3+c4+c5+c6+c7))
     sleep 1
-    read -r _ c1 c2 c3 c4 c5 c6 c7 < <(head -1 /proc/stat)
+    read -r _ c1 c2 c3 c4 c5 c6 c7 _rest < <(head -1 /proc/stat)
     IDLE2=$c4; TOTAL2=$((c1+c2+c3+c4+c5+c6+c7))
     DIFF_IDLE=$((IDLE2 - IDLE1))
     DIFF_TOTAL=$((TOTAL2 - TOTAL1))
