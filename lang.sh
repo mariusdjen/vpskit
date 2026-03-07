@@ -99,8 +99,15 @@ load_lang() {
     lang_dir=$(_find_lang_dir)
     local lang_file="${lang_dir}/${lang_code}.sh"
 
+    # Telecharger si le fichier n'existe pas ou s'il a plus de 24h (invalidation du cache)
+    local need_download="false"
     if [ ! -f "$lang_file" ]; then
-        # Essayer de telecharger si on est en mode curl
+        need_download="true"
+    elif [ -n "$(find "$lang_file" -mmin +1440 2>/dev/null)" ]; then
+        need_download="true"
+    fi
+
+    if [ "$need_download" = "true" ]; then
         local repo_base="${REPO_BASE:-https://raw.githubusercontent.com/mariusdjen/vpskit/main}"
         if command -v curl &>/dev/null; then
             curl -fsSL "${repo_base}/lang/${lang_code}.sh" -o "$lang_file" 2>/dev/null || true
