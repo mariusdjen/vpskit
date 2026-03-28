@@ -712,8 +712,10 @@ if is_done "step3"; then
     skip_step "$(printf "$RMSG_SETUP_STEP3_TITLE" "$USERNAME")"
 elif confirm_step "$(printf "$RMSG_SETUP_STEP3_TITLE" "$USERNAME")" "$(printf "$RMSG_SETUP_STEP3_DESC" "$USERNAME")"; then
     mkdir -p "/home/$USERNAME/.ssh"
-    if [ -f /root/.ssh/authorized_keys ]; then
+    if [ -f /root/.ssh/authorized_keys ] && [ -s /root/.ssh/authorized_keys ]; then
         cp /root/.ssh/authorized_keys "/home/$USERNAME/.ssh/"
+    elif [ "__SSH_USER__" != "root" ] && [ -f "/home/__SSH_USER__/.ssh/authorized_keys" ] && [ -s "/home/__SSH_USER__/.ssh/authorized_keys" ]; then
+        cp "/home/__SSH_USER__/.ssh/authorized_keys" "/home/$USERNAME/.ssh/"
     else
         touch "/home/$USERNAME/.ssh/authorized_keys"
     fi
@@ -874,10 +876,13 @@ inject_lang_into_remote "$TMPSCRIPT"
 
 # Remplacer le placeholder USERNAME (compatible macOS et Linux)
 SAFE_USERNAME=$(sed_escape "$USERNAME")
+SAFE_SSH_USER=$(sed_escape "$SSH_USER")
 if [ "$OS" = "mac" ]; then
     sed -i '' "s|__USERNAME__|$SAFE_USERNAME|g" "$TMPSCRIPT"
+    sed -i '' "s|__SSH_USER__|$SAFE_SSH_USER|g" "$TMPSCRIPT"
 else
     sed -i "s|__USERNAME__|$SAFE_USERNAME|g" "$TMPSCRIPT"
+    sed -i "s|__SSH_USER__|$SAFE_SSH_USER|g" "$TMPSCRIPT"
 fi
 
 # Envoyer le script sur le serveur et l'exécuter (nom aleatoire pour eviter les attaques symlink)
