@@ -77,7 +77,11 @@ else
     SSH_DIR="$HOME/.ssh"
 fi
 
-LOCAL_STATE="$SSH_DIR/.vps-bootstrap-local"
+LOCAL_STATE="$SSH_DIR/.vpskit-local"
+LOCAL_STATE_LEGACY="$SSH_DIR/.vps-bootstrap-local"
+if [ ! -f "$LOCAL_STATE" ] && [ -f "$LOCAL_STATE_LEGACY" ]; then
+    mv "$LOCAL_STATE_LEGACY" "$LOCAL_STATE"
+fi
 SETTINGS_FILE="$SSH_DIR/.vpskit-settings"
 
 # =========================================

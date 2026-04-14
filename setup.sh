@@ -7,7 +7,7 @@ set -euo pipefail
 # Fonctionne sur Mac, Linux et Windows (Git Bash / WSL)
 # Reprend automatiquement en cas de déconnexion.
 #
-# Usage : bash <(curl -sL https://raw.githubusercontent.com/mariusdjen/vps-bootstrap/main/setup.sh)
+# Usage : bash <(curl -sL https://raw.githubusercontent.com/mariusdjen/vpskit/main/vpskit.sh)
 # ============================================
 
 # --- Couleurs ---
@@ -130,7 +130,11 @@ mkdir -p "$SSH_DIR"
 chmod 700 "$SSH_DIR"
 
 # --- Fichier de sauvegarde locale (IP, clé, user) ---
-LOCAL_STATE="$SSH_DIR/.vps-bootstrap-local"
+LOCAL_STATE="$SSH_DIR/.vpskit-local"
+LOCAL_STATE_LEGACY="$SSH_DIR/.vps-bootstrap-local"
+if [ ! -f "$LOCAL_STATE" ] && [ -f "$LOCAL_STATE_LEGACY" ]; then
+    mv "$LOCAL_STATE_LEGACY" "$LOCAL_STATE"
+fi
 
 # =========================================
 # FONCTION : SÉLECTION DE CLÉ SSH
@@ -139,7 +143,7 @@ LOCAL_STATE="$SSH_DIR/.vps-bootstrap-local"
 select_ssh_key() {
     KEYS=()
     for key in "$SSH_DIR"/*; do
-        if [ -f "$key" ] && [[ "$key" != *.pub ]] && [[ "$(basename "$key")" != "config"* ]] && [[ "$(basename "$key")" != "known_hosts"* ]] && [[ "$(basename "$key")" != ".vps-bootstrap"* ]]; then
+        if [ -f "$key" ] && [[ "$key" != *.pub ]] && [[ "$(basename "$key")" != "config"* ]] && [[ "$(basename "$key")" != "known_hosts"* ]] && [[ "$(basename "$key")" != ".vpskit"* ]] && [[ "$(basename "$key")" != ".vps-bootstrap"* ]]; then
             if [ -f "${key}.pub" ]; then
                 KEYS+=("$key")
             fi
@@ -165,7 +169,7 @@ select_ssh_key() {
             read -p "  $MSG_SETUP_SSH_KEY_PROMPT_NEW_NAME" CUSTOM_KEY_NAME
             CUSTOM_KEY_NAME=${CUSTOM_KEY_NAME:-vps}
             SSH_KEY="$SSH_DIR/$CUSTOM_KEY_NAME"
-            ssh-keygen -t ed25519 -C "vps-bootstrap" -f "$SSH_KEY"
+            ssh-keygen -t ed25519 -C "vpskit" -f "$SSH_KEY"
             success "$(printf "$MSG_SETUP_SSH_KEY_CREATED" "$SSH_KEY")"
         elif [[ "$KEY_CHOICE" =~ ^[0-9]+$ ]] && [ "$KEY_CHOICE" -ge 1 ] && [ "$KEY_CHOICE" -le "${#KEYS[@]}" ]; then
             SSH_KEY="${KEYS[$((KEY_CHOICE - 1))]}"
@@ -183,7 +187,7 @@ select_ssh_key() {
         else
             SSH_KEY="$SSH_DIR/id_ed25519"
         fi
-        ssh-keygen -t ed25519 -C "vps-bootstrap" -f "$SSH_KEY"
+        ssh-keygen -t ed25519 -C "vpskit" -f "$SSH_KEY"
         success "$(printf "$MSG_SETUP_SSH_KEY_CREATED_NEW" "$SSH_KEY")"
     fi
 }
@@ -402,7 +406,13 @@ RED='\033[0;31m'
 NC='\033[0m'
 
 USERNAME="__USERNAME__"
-PROGRESS_FILE="/root/.vps-bootstrap-progress"
+PROGRESS_FILE="/root/.vpskit-progress"
+PROGRESS_FILE_LEGACY="/root/.vps-bootstrap-progress"
+
+# Migrate legacy progress file if present (one-time)
+if [ ! -f "$PROGRESS_FILE" ] && [ -f "$PROGRESS_FILE_LEGACY" ]; then
+    mv "$PROGRESS_FILE_LEGACY" "$PROGRESS_FILE"
+fi
 
 # Créer le fichier de progression s'il n'existe pas
 touch "$PROGRESS_FILE"

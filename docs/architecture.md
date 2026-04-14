@@ -51,7 +51,7 @@ ssh execute script (with sudo if update mode)
 detect_distro() via /etc/os-release
   |
   v
-Load progress (/root/.vps-bootstrap-progress)
+Load progress (/root/.vpskit-progress)
   |
   v
 For each step 1-9:

@@ -85,7 +85,11 @@ USERNAME=""
     echo ""
 
     SSH_DIR="$HOME/.ssh"
-    LOCAL_STATE="$SSH_DIR/.vps-bootstrap-local"
+    LOCAL_STATE="$SSH_DIR/.vpskit-local"
+    LOCAL_STATE_LEGACY="$SSH_DIR/.vps-bootstrap-local"
+    if [ ! -f "$LOCAL_STATE" ] && [ -f "$LOCAL_STATE_LEGACY" ]; then
+        mv "$LOCAL_STATE_LEGACY" "$LOCAL_STATE"
+    fi
 
     if [ -f "$LOCAL_STATE" ]; then
         VPS_IP=$(read_state_var "$LOCAL_STATE" "VPS_IP")

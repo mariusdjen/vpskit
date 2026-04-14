@@ -20,7 +20,7 @@ This project follows strict security practices across all scripts:
 - Remote temp files use **`mktemp`** (unpredictable names), are set to **chmod 700**, and are deleted after execution.
 
 ### File permissions
-- Session files (`~/.ssh/.vps-bootstrap-local`): **chmod 600**
+- Session files (`~/.ssh/.vpskit-local`): **chmod 600**
 - S3 credentials (`~/.ssh/.vpskit-s3`): **chmod 600**
 - `.env` files: **chmod 600**
 - Remote scripts: **chmod 700**
