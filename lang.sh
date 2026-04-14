@@ -44,12 +44,16 @@ choose_language() {
 
 save_lang_preference() {
     local code="$1"
-    local settings_file
+    local settings_file settings_dir
     if [ "${OS:-}" = "windows" ]; then
         settings_file="$USERPROFILE/.ssh/.vpskit-settings"
     else
         settings_file="$HOME/.ssh/.vpskit-settings"
     fi
+
+    settings_dir="$(dirname "$settings_file")"
+    mkdir -p "$settings_dir"
+    chmod 700 "$settings_dir" 2>/dev/null || true
 
     if [ ! -f "$settings_file" ]; then
         printf 'LANG="%s"\n' "$code" > "$settings_file"
