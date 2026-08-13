@@ -793,7 +793,11 @@ CRON_UPDATE_EOF
     scp -i "$ssh_key" "$TMPSCRIPT" "${username}@${vps_ip}:${REMOTE_TMP}"
     rm -f "$TMPSCRIPT"
 
-    ssh -i "$ssh_key" "${username}@${vps_ip}" "chmod 700 '${REMOTE_TMP}'; sudo bash '${REMOTE_TMP}'; rm -f '${REMOTE_TMP}'"
+    if ! ssh -i "$ssh_key" "${username}@${vps_ip}" "chmod 700 '${REMOTE_TMP}' && sudo bash '${REMOTE_TMP}'; _rc=\$?; rm -f '${REMOTE_TMP}'; exit \$_rc"; then
+        err "$MSG_REMOTE_ERR"
+        echo "  $MSG_REMOTE_ERR_HINT"
+        return 1
+    fi
 
     echo ""
     success "$MSG_SETTINGS_RBACKUP_CRON_UPDATED"
@@ -1155,7 +1159,11 @@ RCLONE_EOF
     scp -i "$ssh_key" "$TMPSCRIPT" "${username}@${vps_ip}:${REMOTE_TMP}"
     rm -f "$TMPSCRIPT"
 
-    ssh -i "$ssh_key" "${username}@${vps_ip}" "chmod 700 '${REMOTE_TMP}'; sudo bash '${REMOTE_TMP}'; rm -f '${REMOTE_TMP}'"
+    if ! ssh -i "$ssh_key" "${username}@${vps_ip}" "chmod 700 '${REMOTE_TMP}' && sudo bash '${REMOTE_TMP}'; _rc=\$?; rm -f '${REMOTE_TMP}'; exit \$_rc"; then
+        err "$MSG_REMOTE_ERR"
+        echo "  $MSG_REMOTE_ERR_HINT"
+        return 1
+    fi
 
     echo ""
     success "$MSG_SETTINGS_RBACKUP_RCLONE_OK"

@@ -405,6 +405,24 @@ BLUE='\033[0;34m'
 RED='\033[0;31m'
 NC='\033[0m'
 
+CURRENT_STEP="$RMSG_SETUP_STARTING"
+
+# Error handler: logs the specific step where setup was aborted
+_step_abort() {
+    local rc=$?
+    if [ "$rc" -ne 0 ]; then
+        echo ""
+        if [ "$CURRENT_STEP" = "$RMSG_SETUP_STARTING" ]; then
+            echo -e "${RED}[ERR] $RMSG_SETUP_ABORTED_GENERIC${NC}"
+        else
+            echo -e "${RED}[ERR] $(printf "$RMSG_SETUP_ABORTED_STEP" "$CURRENT_STEP")${NC}"
+        fi
+        echo -e "${RED}[ERR] $RMSG_SETUP_ABORT_HINT${NC}"
+        echo -e "${RED}[ERR] $RMSG_SETUP_ABORT_RESUME${NC}"
+    fi
+}
+trap _step_abort EXIT
+
 USERNAME="__USERNAME__"
 PROGRESS_FILE="/root/.vpskit-progress"
 PROGRESS_FILE_LEGACY="/root/.vps-bootstrap-progress"
@@ -663,6 +681,7 @@ mark_done() {
 }
 
 confirm_step() {
+    CURRENT_STEP="$1"
     echo ""
     echo -e "${YELLOW}[>] $1${NC}"
     echo "  $2"
@@ -905,9 +924,14 @@ fi
 rm -f "$TMPSCRIPT"
 
 if [ "$USE_SUDO" = true ]; then
-    ssh -t -i "$SSH_KEY" "${SSH_USER}@${VPS_IP}" "chmod 700 '${REMOTE_TMP}'; sudo bash '${REMOTE_TMP}'; rm -f '${REMOTE_TMP}'"
+    REMOTE_CMD="sudo bash '${REMOTE_TMP}'"
 else
-    ssh -t -i "$SSH_KEY" "${SSH_USER}@${VPS_IP}" "chmod 700 '${REMOTE_TMP}'; bash '${REMOTE_TMP}'; rm -f '${REMOTE_TMP}'"
+    REMOTE_CMD="bash '${REMOTE_TMP}'"
+fi
+if ! ssh -t -i "$SSH_KEY" "${SSH_USER}@${VPS_IP}" "chmod 700 '${REMOTE_TMP}' && ${REMOTE_CMD}; _rc=\$?; rm -f '${REMOTE_TMP}'; exit \$_rc"; then
+    err "$MSG_SETUP_REMOTE_ERR"
+    echo "  $MSG_SETUP_REMOTE_ERR_HINT"
+    exit 1
 fi
 
 # =========================================

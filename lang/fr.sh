@@ -34,6 +34,13 @@ MSG_VPSKIT_SCRIPT_NOT_FOUND="Script introuvable : %s"
 MSG_VPSKIT_TAGLINE="Set up. Secure. Deploy."
 
 # ============================================
+# SHARED (execution des scripts distants)
+# ============================================
+
+MSG_REMOTE_ERR="Le script a echoue sur le serveur."
+MSG_REMOTE_ERR_HINT="  Voir l'erreur ci-dessus. Relancez vpskit pour reessayer."
+
+# ============================================
 # SETTINGS.SH
 # ============================================
 
@@ -220,6 +227,8 @@ MSG_SETUP_UPDATE_CONNTEST_ERR="Impossible de se connecter (ni %s, ni root)."
 MSG_SETUP_UPDATE_CONNTEST_HINT="Verifiez l'IP, la cle SSH et le nom d'utilisateur."
 
 MSG_SETUP_SCP_ERR="Impossible d'envoyer le script sur le serveur. Verifiez la connexion."
+MSG_SETUP_REMOTE_ERR="Le script de configuration a echoue sur le serveur."
+MSG_SETUP_REMOTE_ERR_HINT="  Voir l'erreur ci-dessus. Relancez vpskit et choisissez 'Reprendre' pour continuer."
 
 MSG_SETUP_POSTSETUP_TITLE="=== PARTIE 3 : C'EST TERMINE ! ==="
 MSG_SETUP_POSTSETUP_CONNECT_HINT="Pour vous connecter au serveur :"
@@ -244,6 +253,11 @@ RMSG_SETUP_DISTRO_RHEL="  - AlmaLinux, Rocky Linux, CentOS, Fedora (famille DNF)
 RMSG_SETUP_DISTRO_DETECTED="Distribution detectee : %s (famille %s)"
 RMSG_SETUP_STEP_EXECUTE_PROMPT="Executer ? (o/N) : "
 RMSG_SETUP_STEP_ALREADY_DONE="(deja fait)"
+RMSG_SETUP_STARTING="(demarrage)"
+RMSG_SETUP_ABORTED_STEP="Configuration interrompue a l'etape : %s"
+RMSG_SETUP_ABORTED_GENERIC="Configuration interrompue. Voir l'erreur ci-dessus."
+RMSG_SETUP_ABORT_HINT="La progression a ete sauvegardee dans /root/.vpskit-progress."
+RMSG_SETUP_ABORT_RESUME="Relancez vpskit et choisissez 'Reprendre' pour continuer."
 
 RMSG_SETUP_STEP1_TITLE="Etape 1/9 : Mise a jour systeme"
 RMSG_SETUP_STEP1_DESC="Met a jour tous les paquets et installe git, curl, wget."

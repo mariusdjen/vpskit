@@ -436,4 +436,8 @@ else
     SSH_TTY_FLAG=""
 fi
 
-ssh $SSH_TTY_FLAG -i "$SSH_KEY" "${USERNAME}@${VPS_IP}" "chmod 700 '${REMOTE_TMP}'; sudo bash '${REMOTE_TMP}'; rm -f '${REMOTE_TMP}'"
+if ! ssh $SSH_TTY_FLAG -i "$SSH_KEY" "${USERNAME}@${VPS_IP}" "chmod 700 '${REMOTE_TMP}' && sudo bash '${REMOTE_TMP}'; _rc=\$?; rm -f '${REMOTE_TMP}'; exit \$_rc"; then
+    err "$MSG_REMOTE_ERR"
+    echo "  $MSG_REMOTE_ERR_HINT"
+    exit 1
+fi
