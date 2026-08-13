@@ -707,7 +707,7 @@ if is_done "step1"; then
     skip_step "$RMSG_SETUP_STEP1_TITLE"
 elif confirm_step "$RMSG_SETUP_STEP1_TITLE" "$RMSG_SETUP_STEP1_DESC"; then
     pkg_update
-    pkg_install git curl wget
+    pkg_install git curl wget sudo
     mark_done "step1"
     done_step "$RMSG_SETUP_STEP1_DONE"
 fi
